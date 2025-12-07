@@ -1,116 +1,91 @@
 # 白虎 (Baihu)
 
-**白虎**是一款基于 React Native 开发的手机自动化控制应用。该应用可以录制用户在手机上的操作过程，保存录制内容，并支持重复执行已录制的操作序列。
+**解放你的双手，你的手机管家**
 
-## 项目简介
+**白虎** 是一款基于 React Native 开发的现代化手机自动化控制与辅助工具应用。它不仅具备强大的自动连点与任务执行功能，还集成了多种日常实用工具，配以清新现代的 UI 设计，旨在为您提供高效、愉悦的使用体验。
 
-白虎（Baihu）是一个移动端自动化工具，主要功能包括：
+![Platform](https://img.shields.io/badge/platform-iOS%20%7C%20Android-blue)
+![Language](https://img.shields.io/badge/language-TypeScript-orange)
+![Framework](https://img.shields.io/badge/framework-React%20Native-61dafb)
 
-- 📱 **操作录制**：记录用户在手机屏幕上的点击、滑动等操作
-- 💾 **操作保存**：将录制的操作序列保存为可重复使用的脚本
-- 🔄 **重复执行**：支持回放已保存的操作序列，实现自动化操作
+## ✨ 项目亮点 (Highlights)
 
-## 技术栈
+### 1. 🎯 强大的自动化能力
+告别重复机械的手指操作，白虎为您提供全方位的自动化支持：
+- **自动任务 (Auto Task)**：支持定时任务与脚本录制执行，不仅是连点，更是流程自动化。
+- **自动滚动 (Auto Roll)**：浏览长网页、短视频时的最佳伴侣，自动模拟滑动操作。
+- **自动刷新 (Auto Refresh)**：适用于抢票、监控数据变动等场景，保持页面实时更新。
 
-- [React Native](https://reactnative.dev) - 跨平台移动应用开发框架
-- TypeScript - 类型安全的 JavaScript 超集
+### 2. 🎨 极致的视觉体验
+作为一款工具类应用，我们拒绝枯燥与简陋：
+- **清新配色**：采用蓝、紫、绿渐变色系，视觉风格轻盈现代。
+- **卡片式布局**：信息层级分明，操作直观便捷。
+- **精致交互**：流畅的动画效果与合理的触控反馈。
+
+### 3. 🧰 贴心的实用工具箱
+集成了生活中高频使用的微工具，一个 APP 解决多个问题：
+- **条形码工具**：模拟与生成条码。
+- **旋转指针**：趣味决策助手，解决“今天吃什么”的世纪难题。
+- **便捷白板**：随时随地记录灵感与备忘。
+- **密码生成器**：一键生成高强度随机密码，保障账号安全。
+
+## 🏗 技术栈
+
+- **Core**: [React Native](https://reactnative.dev) (v0.82)
+- **Language**: TypeScript
+- **UI Architecture**: Flexbox, Responsive Design
+- **Platform**: iOS & Android
 
 ---
 
-This is a [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+## 🚀 快速开始 (Getting Started)
 
-# Getting Started
+> **注意**: 在开始之前，请确保您已完成 [React Native 环境搭建](https://reactnative.dev/docs/set-up-your-environment)。
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+### 第一步：启动 Metro 服务
 
-## Step 1: Start Metro
-
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
-
-To start the Metro dev server, run the following command from the root of your React Native project:
+Metro 是 React Native 的 JavaScript 构建工具。
 
 ```sh
-# Using npm
+# 使用 npm
 npm start
 
-# OR using Yarn
+# 或使用 Yarn
 yarn start
 ```
 
-## Step 2: Build and run your app
+### 第二步：运行应用
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+保持 Metro 终端开启，打开一个新的终端窗口，运行以下命令启动 Android 或 iOS 应用：
 
-### Android
+#### Android
 
 ```sh
-# Using npm
+# 使用 npm
 npm run android
 
-# OR using Yarn
+# 或使用 Yarn
 yarn android
 ```
 
-### iOS
+#### iOS
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
-
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
+对于 iOS，首次运行时需要安装 CocoaPods 依赖：
 
 ```sh
-bundle install
+cd ios && pod install && cd ..
 ```
 
-Then, and every time you update your native dependencies, run:
+然后运行：
 
 ```sh
-bundle exec pod install
-```
-
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
-
-```sh
-# Using npm
+# 使用 npm
 npm run ios
 
-# OR using Yarn
+# 或使用 Yarn
 yarn ios
 ```
 
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
+## 🛠 调试与修改
 
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
-
-## Step 3: Modify your app
-
-Now that you have successfully run the app, let's make changes!
-
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
-
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
-
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+打开 `App.tsx` 或 `src/` 目录下的文件进行修改，保存后应用将通过 [Fast Refresh](https://reactnative.dev/docs/fast-refresh) 自动更新，无需重新编译。

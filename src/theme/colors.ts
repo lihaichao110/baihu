@@ -1,5 +1,5 @@
 export const colors = {
-  background: '#F5F7FA', // Light grey/blue background
+  background: '#E0F7FA', // Updated to Light Cyan to match the fresh look
   text: {
     primary: '#333333',
     secondary: '#666666',
