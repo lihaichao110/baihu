@@ -13,21 +13,20 @@ export interface FloatingWindowModuleInterface {
   onCloseButtonClick(): void;
 }
 
-class FloatingWindow implements FloatingWindowModuleInterface {
+class FloatingWindowModuleWrapper implements FloatingWindowModuleInterface {
   private eventEmitter: NativeEventEmitter | null = null;
 
   constructor() {
-    // 只在模块存在时才创建 NativeEventEmitter
-    if (FloatingWindowModule) {
+    if (Platform.OS === 'android' && FloatingWindowModule) {
       this.eventEmitter = new NativeEventEmitter(FloatingWindowModule);
     }
   }
 
-  async checkPermission(): Promise<boolean> {
-    if (!FloatingWindowModule) {
-      return false;
+  checkPermission(): Promise<boolean> {
+    if (FloatingWindowModule) {
+      return FloatingWindowModule.checkPermission();
     }
-    return await FloatingWindowModule.checkPermission();
+    return Promise.resolve(false);
   }
 
   requestPermission(): void {
@@ -83,5 +82,4 @@ class FloatingWindow implements FloatingWindowModuleInterface {
   }
 }
 
-export default new FloatingWindow();
-
+export default new FloatingWindowModuleWrapper();

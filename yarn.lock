@@ -5303,6 +5303,11 @@ react-is@^19.1.1:
   resolved "https://registry.npmjs.org/react-is/-/react-is-19.2.1.tgz#712fa6ee30c8398dc34260017325dad92b9224c5"
   integrity sha512-L7BnWgRbMwzMAubQcS7sXdPdNLmKlucPlopgAzx7FtYbksWZgEWiuYM5x9T6UqS2Ne0rsgQTq5kY2SGqpzUkYA==
 
+react-native-accessibility-services-detector@^1.1.0:
+  version "1.1.0"
+  resolved "https://registry.npmjs.org/react-native-accessibility-services-detector/-/react-native-accessibility-services-detector-1.1.0.tgz#9c7d26bbb256a53e779bacc0830e5e423361d65e"
+  integrity sha512-zKLkmVyk6s9A/GisrPdImxMrZsk8alSY+KPIFyijegJQEK42cmbpiDXHTJvMDyLi4dA/r60/QzKT6UPV9oAh6g==
+
 react-native-safe-area-context@^5.5.2:
   version "5.6.2"
   resolved "https://registry.npmjs.org/react-native-safe-area-context/-/react-native-safe-area-context-5.6.2.tgz#283e006f5b434fb247fcb4be0971ad7473d5c560"

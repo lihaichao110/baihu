@@ -1,12 +1,5 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Image,
-  Dimensions,
-  TouchableOpacity,
-} from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import colors from '../theme/colors';
 
 interface BannerProps {
@@ -21,7 +14,7 @@ export const Banner = ({ onPress }: BannerProps) => {
       onPress={onPress}
     >
       <View style={styles.content}>
-        <Text style={styles.title}>自动任务</Text>
+        <Text style={styles.title}>自动任务11</Text>
         <Text style={styles.subtitle}>解放你的双手，你的手机管家</Text>
 
         <View style={styles.iconRow}>

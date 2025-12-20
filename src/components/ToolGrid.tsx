@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   Dimensions,
 } from 'react-native';
-import colors from '../theme/colors';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GAP = 15;

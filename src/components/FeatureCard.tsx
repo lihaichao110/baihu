@@ -17,6 +17,8 @@ interface FeatureCardProps {
   icon?: string; // URL or emoji
   imageUri?: string;
   style?: any;
+  onPress?: () => void; // 添加点击回调
+  disabled?: boolean; // 添加禁用状态
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -31,18 +33,26 @@ export const FeatureCard = ({
   width = 'half',
   imageUri,
   style,
+  onPress,
+  disabled = false,
 }: FeatureCardProps) => {
   const cardStyle = [
     styles.container,
     {
       backgroundColor,
       width: width === 'full' ? '100%' : HALF_WIDTH,
+      opacity: disabled ? 0.6 : 1,
     },
     style,
   ];
 
   return (
-    <TouchableOpacity style={cardStyle} activeOpacity={0.9}>
+    <TouchableOpacity
+      style={cardStyle}
+      activeOpacity={0.9}
+      onPress={onPress}
+      disabled={disabled}
+    >
       <View style={styles.textContainer}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.subtitle}>{subtitle}</Text>
