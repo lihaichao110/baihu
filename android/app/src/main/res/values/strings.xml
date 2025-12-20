@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">baihu</string>
+    <string name="accessibility_service_description">白虎需要此权限来自动执行触摸操作。启用后可以录制和回放触摸手势。</string>
 </resources>

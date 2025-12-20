@@ -1,16 +1,29 @@
-import { NativeModules, NativeEventEmitter, Platform } from 'react-native';
+import { NativeModules, NativeEventEmitter, Platform, EmitterSubscription } from 'react-native';
 
 const { FloatingWindowModule } = NativeModules;
 
+export interface TouchEventData {
+  type: 'tap' | 'swipe_start' | 'swipe_move' | 'swipe_end';
+  x: number;
+  y: number;
+  timestamp: number;
+}
+
+export interface DeviceInfoData {
+  width: number;
+  height: number;
+}
+
 export interface FloatingWindowModuleInterface {
-  checkPermission(): Promise<boolean>;
-  requestPermission(): void;
-  showFloatingWindow(timeText: string, isRunning: boolean): void;
-  updateFloatingWindow(timeText: string, isRunning: boolean): void;
+  showFloatingWindow(): void;
   hideFloatingWindow(): void;
-  onStartButtonClick(): void;
-  onEndButtonClick(): void;
-  onCloseButtonClick(): void;
+  showOverlay(): void;
+  hideOverlay(): void;
+  updateTime(timeText: string): void;
+  updateRecordingState(isRecording: boolean): void;
+  isAccessibilityServiceEnabled(): Promise<boolean>;
+  openAccessibilitySettings(): void;
+  addEventListener(eventName: string, callback: (data?: any) => void): EmitterSubscription | { remove: () => void };
 }
 
 class FloatingWindowModuleWrapper implements FloatingWindowModuleInterface {
@@ -22,28 +35,9 @@ class FloatingWindowModuleWrapper implements FloatingWindowModuleInterface {
     }
   }
 
-  checkPermission(): Promise<boolean> {
+  showFloatingWindow(): void {
     if (FloatingWindowModule) {
-      return FloatingWindowModule.checkPermission();
-    }
-    return Promise.resolve(false);
-  }
-
-  requestPermission(): void {
-    if (FloatingWindowModule) {
-      FloatingWindowModule.requestPermission();
-    }
-  }
-
-  showFloatingWindow(timeText: string, isRunning: boolean): void {
-    if (FloatingWindowModule) {
-      FloatingWindowModule.showFloatingWindow(timeText, isRunning);
-    }
-  }
-
-  updateFloatingWindow(timeText: string, isRunning: boolean): void {
-    if (FloatingWindowModule) {
-      FloatingWindowModule.updateFloatingWindow(timeText, isRunning);
+      FloatingWindowModule.showFloatingWindow();
     }
   }
 
@@ -53,25 +47,44 @@ class FloatingWindowModuleWrapper implements FloatingWindowModuleInterface {
     }
   }
 
-  onStartButtonClick(): void {
+  showOverlay(): void {
     if (FloatingWindowModule) {
-      FloatingWindowModule.onStartButtonClick();
+      FloatingWindowModule.showOverlay();
     }
   }
 
-  onEndButtonClick(): void {
+  hideOverlay(): void {
     if (FloatingWindowModule) {
-      FloatingWindowModule.onEndButtonClick();
+      FloatingWindowModule.hideOverlay();
     }
   }
 
-  onCloseButtonClick(): void {
+  updateTime(timeText: string): void {
     if (FloatingWindowModule) {
-      FloatingWindowModule.onCloseButtonClick();
+      FloatingWindowModule.updateTime(timeText);
     }
   }
 
-  addEventListener(eventName: string, callback: (data?: any) => void) {
+  updateRecordingState(isRecording: boolean): void {
+    if (FloatingWindowModule) {
+      FloatingWindowModule.updateRecordingState(isRecording);
+    }
+  }
+
+  async isAccessibilityServiceEnabled(): Promise<boolean> {
+    if (FloatingWindowModule) {
+      return await FloatingWindowModule.isAccessibilityServiceEnabled();
+    }
+    return false;
+  }
+
+  openAccessibilitySettings(): void {
+    if (FloatingWindowModule) {
+      FloatingWindowModule.openAccessibilitySettings();
+    }
+  }
+
+  addEventListener(eventName: string, callback: (data?: any) => void): EmitterSubscription | { remove: () => void } {
     if (!this.eventEmitter) {
       // 返回一个空的订阅对象，避免崩溃
       return {

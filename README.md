@@ -13,6 +13,8 @@
 ### 1. 🎯 强大的自动化能力
 告别重复机械的手指操作，白虎为您提供全方位的自动化支持：
 - **自动任务 (Auto Task)**：支持定时任务与脚本录制执行，不仅是连点，更是流程自动化。
+- **🆕 悬浮窗录制**：使用自定义悬浮窗实时记录触摸位置和滑动轨迹。
+- **🆕 触摸记录**：精确记录点击坐标、滑动路径和时间戳，支持导出和回放。
 - **自动滚动 (Auto Roll)**：浏览长网页、短视频时的最佳伴侣，自动模拟滑动操作。
 - **自动刷新 (Auto Refresh)**：适用于抢票、监控数据变动等场景，保持页面实时更新。
 
@@ -35,6 +37,47 @@
 - **Language**: TypeScript
 - **UI Architecture**: Flexbox, Responsive Design
 - **Platform**: iOS & Android
+- **🆕 Overlay**: react-native-magic-overlay (自定义悬浮窗)
+- **🆕 Storage**: @react-native-async-storage/async-storage (数据持久化)
+- **🆕 Native Modules**: 自定义 Kotlin 模块（悬浮窗权限管理）
+
+---
+
+## 🎉 新功能：悬浮窗触摸记录
+
+### 功能特点
+
+✅ **自定义悬浮窗**
+- 可拖动到屏幕任意位置
+- 实时显示录制状态和时间
+- 美观的 UI 设计和流畅动画
+
+✅ **触摸记录系统**
+- 精确记录点击位置（X, Y 坐标）
+- 记录滑动轨迹（起点、路径、终点）
+- 记录时间戳（毫秒级精度）
+- 区分不同触摸类型（tap, swipe_start, swipe_move, swipe_end）
+
+✅ **数据管理**
+- 本地持久化存储
+- 会话管理（查看、导出、删除）
+- 导出为 JSON 格式
+- 统计信息展示（时长、触摸次数、点击、滑动）
+
+### 快速体验
+
+1. 点击首页"自动任务"横幅
+2. 授予无障碍服务权限和悬浮窗权限
+3. 点击悬浮窗的"开始录制"按钮
+4. 在屏幕上进行点击和滑动操作
+5. 点击"停止录制"查看统计信息
+
+### 详细文档
+
+- 📖 [完整功能指南](./FLOATING_WINDOW_GUIDE.md)
+- 🚀 [快速开始教程](./QUICK_START.md)
+- 📝 [实现总结](./IMPLEMENTATION_SUMMARY.md)
+- 💡 [代码示例](./src/examples/TouchRecorderExample.ts)
 
 ---
 

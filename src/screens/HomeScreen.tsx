@@ -6,6 +6,7 @@ import {
   StatusBar,
   Alert,
   Platform,
+  NativeModules,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Header } from '../components/Header';
@@ -13,8 +14,15 @@ import { Banner } from '../components/Banner';
 import { FeatureCard } from '../components/FeatureCard';
 import { ToolGrid } from '../components/ToolGrid';
 import colors from '../theme/colors';
-import FloatingWindowModule from '../modules/FloatingWindowModule';
 import AccessibilityServiceModule from '../modules/AccessibilityServiceModule';
+import FloatingWindowModule, {
+  TouchEventData,
+  DeviceInfoData,
+} from '../modules/FloatingWindowModule';
+import TouchRecorder, { TouchRecord } from '../utils/TouchRecorder';
+
+// 导入自定义的悬浮窗权限模块
+const { OverlayPermissionModule } = NativeModules;
 
 export const HomeScreen = () => {
   const [isTaskRunning, setIsTaskRunning] = useState(false);
@@ -22,7 +30,6 @@ export const HomeScreen = () => {
   const [isFloatingWindowVisible, setIsFloatingWindowVisible] = useState(false);
   const [isAccessibilityEnabled, setIsAccessibilityEnabled] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const updateIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -68,77 +75,93 @@ export const HomeScreen = () => {
         setIsAccessibilityEnabled(true);
       }
 
-      // 2. 检查悬浮窗权限
-      const hasPermission = await FloatingWindowModule.checkPermission();
-      if (!hasPermission && Platform.OS === 'android') {
-        Alert.alert(
-          '需要悬浮窗权限',
-          '需要悬浮窗权限才能显示控制面板，请在设置中开启',
-          [
-            { text: '取消', style: 'cancel' },
-            {
-              text: '去设置',
-              onPress: () => FloatingWindowModule.requestPermission(),
-            },
-          ],
-        );
-        return;
+      // 2. 检查悬浮窗权限（使用自定义模块）
+      if (Platform.OS === 'android') {
+        const hasPermission = await OverlayPermissionModule.checkPermission();
+        if (!hasPermission) {
+          Alert.alert(
+            '需要悬浮窗权限',
+            '需要悬浮窗权限才能显示控制面板，请在设置中开启',
+            [
+              { text: '取消', style: 'cancel' },
+              {
+                text: '去设置',
+                onPress: async () => {
+                  await OverlayPermissionModule.requestPermission();
+                },
+              },
+            ],
+          );
+          return;
+        }
       }
 
-      // 3. 所有权限都已具备，显示悬浮窗
+      // 3. 所有权限都已具备，显示原生悬浮窗
       setIsTaskRunning(false);
       setElapsedTime(0);
       setIsFloatingWindowVisible(true);
-      FloatingWindowModule.showFloatingWindow('00:00', false);
 
-      // 显示成功提示
-      Alert.alert('准备就绪', '点击悬浮窗上的"开始"按钮即可开始录制自动任务', [
-        { text: '知道了' },
-      ]);
+      // 显示原生悬浮窗
+      FloatingWindowModule.showFloatingWindow();
     } catch (error) {
       console.error('打开自动任务失败:', error);
       Alert.alert('错误', '无法启动自动任务，请稍后重试');
     }
   };
 
-  const handleStartTask = useCallback((event?: any) => {
+  const handleStartTask = useCallback(() => {
     setIsTaskRunning(true);
     setElapsedTime(0);
 
-    if (Platform.OS === 'ios' && event && event.coordinates) {
-      console.log('iOS 记录的点击坐标:', event.coordinates);
-      // 这里可以将坐标保存到本地存储，或者用于应用内自动化
-      // 由于iOS无法自动执行系统级点击，这里仅作为记录
-      Alert.alert(
-        '提示',
-        `已记录 ${event.coordinates.length} 个点击位置。请使用"切换控制"功能进行录制。`,
-      );
-    }
+    // 显示触摸录制浮层
+    FloatingWindowModule.showOverlay();
 
     // 启动计时器
     intervalRef.current = setInterval(() => {
       setElapsedTime(prev => prev + 1);
     }, 1000);
 
-    // 更新悬浮窗
-    FloatingWindowModule.updateFloatingWindow('00:00', true);
-
-    console.log('任务已开始');
+    console.log('任务已开始，开始记录触摸位置');
   }, []);
 
-  const handleEndTask = useCallback(() => {
+  const handleEndTask = useCallback(async () => {
     setIsTaskRunning(false);
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
-    // 可以在这里添加任务结束的逻辑
-    setElapsedTime(currentTime => {
-      console.log('任务已结束，总时长:', formatTime(currentTime));
-      FloatingWindowModule.updateFloatingWindow(formatTime(currentTime), false);
-      return currentTime;
-    });
-  }, []);
+
+    // 隐藏触摸录制浮层
+    FloatingWindowModule.hideOverlay();
+
+    // 停止录制并保存会话
+    const session = await TouchRecorder.stopRecording();
+
+    if (session) {
+      const stats = TouchRecorder.getSessionStats(session);
+      const duration = formatTime(Math.floor(stats.duration / 1000));
+
+      Alert.alert(
+        '录制完成',
+        `录制时长: ${duration}\n` +
+          `记录的触摸事件: ${stats.totalTouches}\n` +
+          `点击次数: ${stats.taps}\n` +
+          `滑动次数: ${stats.swipes}`,
+        [
+          {
+            text: '查看详情',
+            onPress: () => {
+              console.log('会话详情:', JSON.stringify(session, null, 2));
+              // 这里可以跳转到详情页面
+            },
+          },
+          { text: '确定' },
+        ],
+      );
+    }
+
+    console.log('任务已结束，总时长:', formatTime(elapsedTime));
+  }, [elapsedTime]);
 
   const handleCloseFloatingWindow = useCallback(() => {
     setIsTaskRunning(currentRunning => {
@@ -147,6 +170,8 @@ export const HomeScreen = () => {
       }
       return false;
     });
+
+    // 隐藏原生悬浮窗
     FloatingWindowModule.hideFloatingWindow();
     setIsFloatingWindowVisible(false);
     setElapsedTime(0);
@@ -230,29 +255,77 @@ export const HomeScreen = () => {
     Alert.alert('功能提示', '自动刷新功能开发中...');
   };
 
+  // 更新悬浮窗状态
+  useEffect(() => {
+    if (isFloatingWindowVisible) {
+      FloatingWindowModule.updateTime(formatTime(elapsedTime));
+      FloatingWindowModule.updateRecordingState(isTaskRunning);
+    }
+  }, [isFloatingWindowVisible, isTaskRunning, elapsedTime]);
+
   // 监听悬浮窗按钮事件
   useEffect(() => {
+    if (!isFloatingWindowVisible) {
+      return;
+    }
+
     const startListener = FloatingWindowModule.addEventListener(
-      'onStartButtonClick',
+      'onStartRecording',
       handleStartTask,
     );
 
-    const endListener = FloatingWindowModule.addEventListener(
-      'onEndButtonClick',
+    const stopListener = FloatingWindowModule.addEventListener(
+      'onStopRecording',
       handleEndTask,
     );
 
     const closeListener = FloatingWindowModule.addEventListener(
-      'onCloseButtonClick',
+      'onClose',
       handleCloseFloatingWindow,
+    );
+
+    // 监听设备信息（录制开始时获取屏幕尺寸）
+    const deviceInfoListener = FloatingWindowModule.addEventListener(
+      'onDeviceInfo',
+      (data: DeviceInfoData) => {
+        console.log('设备屏幕尺寸:', data.width, 'x', data.height);
+        // 开始录制，使用原生端获取的屏幕尺寸
+        TouchRecorder.startRecording(data.width, data.height);
+      },
+    );
+
+    // 监听触摸事件
+    const touchListener = FloatingWindowModule.addEventListener(
+      'onTouchRecorded',
+      (data: TouchEventData) => {
+        const touchRecord: TouchRecord = {
+          x: data.x,
+          y: data.y,
+          timestamp: data.timestamp,
+          type: data.type,
+        };
+        TouchRecorder.recordTouch(touchRecord);
+        console.log(
+          `触摸事件: ${data.type} at (${data.x.toFixed(0)}, ${data.y.toFixed(
+            0,
+          )})`,
+        );
+      },
     );
 
     return () => {
       startListener.remove();
-      endListener.remove();
+      stopListener.remove();
       closeListener.remove();
+      deviceInfoListener.remove();
+      touchListener.remove();
     };
-  }, [handleStartTask, handleEndTask, handleCloseFloatingWindow]);
+  }, [
+    isFloatingWindowVisible,
+    handleStartTask,
+    handleEndTask,
+    handleCloseFloatingWindow,
+  ]);
 
   // 监听无障碍服务状态变化
   useEffect(() => {
@@ -307,33 +380,11 @@ export const HomeScreen = () => {
     };
   }, [isFloatingWindowVisible]);
 
-  // 更新悬浮窗时间显示
-  useEffect(() => {
-    if (isFloatingWindowVisible) {
-      updateIntervalRef.current = setInterval(() => {
-        FloatingWindowModule.updateFloatingWindow(
-          formatTime(elapsedTime),
-          isTaskRunning,
-        );
-      }, 1000);
-    }
-
-    return () => {
-      if (updateIntervalRef.current) {
-        clearInterval(updateIntervalRef.current);
-        updateIntervalRef.current = null;
-      }
-    };
-  }, [isFloatingWindowVisible, elapsedTime, isTaskRunning]);
-
   // 清理计时器
   useEffect(() => {
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
-      }
-      if (updateIntervalRef.current) {
-        clearInterval(updateIntervalRef.current);
       }
     };
   }, []);
@@ -354,7 +405,7 @@ export const HomeScreen = () => {
             subtitle="auto clicker"
             backgroundColor="#8EC5FC"
             width="half"
-            style={{ backgroundColor: '#a18cd1' }} // Override with purple gradient-ish
+            style={styles.purpleCard}
             onPress={handleAutoClickerPress}
             disabled={Platform.OS === 'android' && !isAccessibilityEnabled}
           />
@@ -363,7 +414,7 @@ export const HomeScreen = () => {
             subtitle="auto roll"
             backgroundColor="#80d0c7"
             width="half"
-            style={{ backgroundColor: '#43e97b' }} // Override with green gradient-ish
+            style={styles.greenCard}
             onPress={handleAutoScrollPress}
             disabled={Platform.OS === 'android' && !isAccessibilityEnabled}
           />
@@ -403,5 +454,11 @@ const styles = StyleSheet.create({
   },
   fullWidthFeature: {
     paddingHorizontal: 20,
+  },
+  purpleCard: {
+    backgroundColor: '#a18cd1',
+  },
+  greenCard: {
+    backgroundColor: '#43e97b',
   },
 });

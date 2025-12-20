@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/floatingContainer"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/floating_window_background"
+    android:paddingStart="8dp"
+    android:paddingEnd="8dp"
+    android:paddingTop="8dp"
+    android:paddingBottom="8dp"
+    android:elevation="8dp">
+
+    <!-- 时间显示 -->
+    <TextView
+        android:id="@+id/timeText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="00:00"
+        android:textSize="14sp"
+        android:textColor="#FFFFFF"
+        android:fontFamily="monospace"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:paddingVertical="4dp" />
+
+    <!-- 开始按钮 -->
+    <Button
+        android:id="@+id/startButton"
+        android:layout_width="match_parent"
+        android:layout_height="28dp"
+        android:text="▶ 开始"
+        android:textSize="10sp"
+        android:textColor="#FFFFFF"
+        android:background="@drawable/button_start"
+        android:layout_marginTop="4dp"
+        android:visibility="visible" />
+
+    <!-- 停止按钮 -->
+    <Button
+        android:id="@+id/stopButton"
+        android:layout_width="match_parent"
+        android:layout_height="28dp"
+        android:text="⏹ 停止"
+        android:textSize="10sp"
+        android:textColor="#FFFFFF"
+        android:background="@drawable/button_stop"
+        android:layout_marginTop="4dp"
+        android:visibility="gone" />
+
+    <!-- 关闭按钮 -->
+    <Button
+        android:id="@+id/closeButton"
+        android:layout_width="match_parent"
+        android:layout_height="28dp"
+        android:text="✕ 关闭"
+        android:textSize="10sp"
+        android:textColor="#FFFFFF"
+        android:background="@drawable/button_close"
+        android:layout_marginTop="4dp" />
+
+</LinearLayout>
