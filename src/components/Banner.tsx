@@ -1,14 +1,27 @@
 import React from 'react';
-import { View, Text, StyleSheet, Image, Dimensions } from 'react-native';
-import { colors } from '../theme/colors';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Image,
+  Dimensions,
+  TouchableOpacity,
+} from 'react-native';
+import colors from '../theme/colors';
 
-const { width } = Dimensions.get('window');
+interface BannerProps {
+  onPress?: () => void;
+}
 
-export const Banner = () => {
+export const Banner = ({ onPress }: BannerProps) => {
   return (
-    <View style={styles.container}>
+    <TouchableOpacity
+      style={styles.container}
+      activeOpacity={0.9}
+      onPress={onPress}
+    >
       <View style={styles.content}>
-        <Text style={styles.title}>自动连点器</Text>
+        <Text style={styles.title}>自动任务</Text>
         <Text style={styles.subtitle}>解放你的双手，你的手机管家</Text>
 
         <View style={styles.iconRow}>
@@ -33,7 +46,7 @@ export const Banner = () => {
         }}
         style={styles.image}
       />
-    </View>
+    </TouchableOpacity>
   );
 };
 

@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Dimensions,
 } from 'react-native';
+import colors from '../theme/colors';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GAP = 15;
@@ -156,6 +157,7 @@ const styles = StyleSheet.create({
   barcodeLines: {
     fontSize: 24,
     letterSpacing: 2,
+    color: '#333',
   },
   iconContainer: {
     width: 36,
