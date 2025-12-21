@@ -48,6 +48,18 @@
         android:layout_marginTop="4dp"
         android:visibility="gone" />
 
+    <!-- 执行按钮 -->
+    <Button
+        android:id="@+id/playButton"
+        android:layout_width="match_parent"
+        android:layout_height="28dp"
+        android:text="▶ 执行"
+        android:textSize="10sp"
+        android:textColor="#FFFFFF"
+        android:background="@drawable/button_play"
+        android:layout_marginTop="4dp"
+        android:visibility="gone" />
+
     <!-- 关闭按钮 -->
     <Button
         android:id="@+id/closeButton"

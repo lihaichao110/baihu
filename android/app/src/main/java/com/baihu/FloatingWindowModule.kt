@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.util.DisplayMetrics
 import android.view.Gravity
@@ -20,6 +22,8 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.ReadableArray
+import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import kotlin.math.abs
@@ -48,6 +52,19 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
     private var isSwiping = false
     private var touchCount = 0
     private val SWIPE_THRESHOLD = 20f // 超过这个距离才算滑动
+    
+    // 速度计算相关
+    private var lastTouchX = 0f
+    private var lastTouchY = 0f
+    private var lastTouchTime = 0L
+    
+    // 屏幕方向
+    private var screenOrientation = "portrait"
+    
+    // 回放相关
+    private var isPlaying = false
+    private var playbackHandler: Handler? = null
+    private var currentPlaybackIndex = 0
 
     override fun getName(): String {
         return "FloatingWindowModule"
@@ -238,12 +255,21 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
             val touchIndicator = view.findViewById<View>(R.id.touchIndicator)
 
             touchLayer.setOnTouchListener { _, event ->
+                val currentTime = System.currentTimeMillis()
+                val pressure = event.pressure.coerceIn(0f, 1f)
+                val pointerType = getPointerType(event)
+                
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> {
                         touchStartX = event.rawX
                         touchStartY = event.rawY
-                        touchStartTime = System.currentTimeMillis()
+                        touchStartTime = currentTime
                         isSwiping = false
+                        
+                        // 重置速度计算
+                        lastTouchX = event.rawX
+                        lastTouchY = event.rawY
+                        lastTouchTime = currentTime
                         
                         // 显示触摸指示器
                         showTouchIndicator(touchIndicator, event.x, event.y)
@@ -260,47 +286,143 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
                         swipeEndX = event.rawX
                         swipeEndY = event.rawY
                         
+                        // 计算速度
+                        val (velocityX, velocityY) = calculateVelocity(event.rawX, event.rawY, currentTime)
+                        
                         if (!isSwiping && (deltaX > SWIPE_THRESHOLD || deltaY > SWIPE_THRESHOLD)) {
                             // 开始滑动
                             isSwiping = true
-                            sendTouchEvent("swipe_start", touchStartX, touchStartY, touchStartTime)
+                            sendTouchEvent(
+                                "swipe_start", 
+                                touchStartX, 
+                                touchStartY, 
+                                touchStartTime,
+                                pressure,
+                                pointerType,
+                                0f, 
+                                0f
+                            )
                             touchCount++
                             updateTouchCountDisplay()
                         }
                         
                         if (isSwiping) {
                             // 发送滑动移动事件
-                            sendTouchEvent("swipe_move", event.rawX, event.rawY, System.currentTimeMillis())
+                            sendTouchEvent(
+                                "swipe_move", 
+                                event.rawX, 
+                                event.rawY, 
+                                currentTime,
+                                pressure,
+                                pointerType,
+                                velocityX, 
+                                velocityY
+                            )
                         }
+                        
+                        // 更新上次触摸信息
+                        lastTouchX = event.rawX
+                        lastTouchY = event.rawY
+                        lastTouchTime = currentTime
+                        
                         true
                     }
                     MotionEvent.ACTION_UP -> {
                         // 隐藏触摸指示器
                         hideTouchIndicator(touchIndicator)
                         
-                        if (isSwiping) {
+                        val endX = event.rawX
+                        val endY = event.rawY
+                        val wasSwipe = isSwiping
+                        val savedStartX = touchStartX
+                        val savedStartY = touchStartY
+                        
+                        // 计算最终速度
+                        val (velocityX, velocityY) = calculateVelocity(endX, endY, currentTime)
+                        
+                        if (wasSwipe) {
                             // 滑动结束
-                            sendTouchEvent("swipe_end", event.rawX, event.rawY, System.currentTimeMillis())
-                            // 执行实际的滑动手势穿透到下层应用
-                            performSwipeThrough(touchStartX, touchStartY, event.rawX, event.rawY)
+                            sendTouchEvent(
+                                "swipe_end", 
+                                endX, 
+                                endY, 
+                                currentTime,
+                                pressure,
+                                pointerType,
+                                velocityX, 
+                                velocityY
+                            )
                         } else {
                             // 点击事件
-                            sendTouchEvent("tap", event.rawX, event.rawY, System.currentTimeMillis())
+                            sendTouchEvent(
+                                "tap", 
+                                endX, 
+                                endY, 
+                                currentTime,
+                                pressure,
+                                pointerType,
+                                0f, 
+                                0f
+                            )
                             touchCount++
                             updateTouchCountDisplay()
-                            // 执行实际的点击手势穿透到下层应用
-                            performTapThrough(event.rawX, event.rawY)
                         }
+                        
+                        // 重置速度计算
+                        lastTouchTime = 0L
+                        
+                        // 暂时让蒙层不可触摸，然后执行手势穿透
+                        setOverlayTouchable(false)
+                        
+                        // 使用 Handler 延迟执行手势，确保用户手指已离开
+                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                            if (wasSwipe) {
+                                performSwipeThrough(savedStartX, savedStartY, endX, endY)
+                            } else {
+                                performTapThrough(endX, endY)
+                            }
+                            
+                            // 恢复蒙层可触摸
+                            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                setOverlayTouchable(true)
+                            }, 150)
+                        }, 50)
+                        
                         isSwiping = false
                         true
                     }
                     MotionEvent.ACTION_CANCEL -> {
                         hideTouchIndicator(touchIndicator)
                         isSwiping = false
+                        lastTouchTime = 0L
                         true
                     }
                     else -> false
                 }
+            }
+        }
+    }
+    
+    /**
+     * 设置蒙层是否可以接收触摸事件
+     */
+    private fun setOverlayTouchable(touchable: Boolean) {
+        if (isOverlayShowing && overlayView != null && overlayParams != null) {
+            try {
+                if (touchable) {
+                    overlayParams!!.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                            WindowManager.LayoutParams.FLAG_FULLSCREEN
+                } else {
+                    overlayParams!!.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                            WindowManager.LayoutParams.FLAG_FULLSCREEN
+                }
+                windowManager?.updateViewLayout(overlayView, overlayParams)
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }
@@ -392,19 +514,71 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
-    private fun sendTouchEvent(type: String, x: Float, y: Float, timestamp: Long) {
+    private fun sendTouchEvent(
+        type: String, 
+        x: Float, 
+        y: Float, 
+        timestamp: Long,
+        pressure: Float = 0f,
+        pointerType: String = "touch",
+        velocityX: Float = 0f,
+        velocityY: Float = 0f
+    ) {
         val params: WritableMap = Arguments.createMap()
         params.putString("type", type)
         params.putDouble("x", x.toDouble())
         params.putDouble("y", y.toDouble())
         params.putDouble("timestamp", timestamp.toDouble())
+        params.putDouble("pressure", pressure.toDouble())
+        params.putString("pointerType", pointerType)
+        params.putDouble("velocityX", velocityX.toDouble())
+        params.putDouble("velocityY", velocityY.toDouble())
         sendEvent("onTouchRecorded", params)
+    }
+    
+    /**
+     * 计算速度（像素/秒）
+     */
+    private fun calculateVelocity(
+        currentX: Float, 
+        currentY: Float, 
+        currentTime: Long
+    ): Pair<Float, Float> {
+        if (lastTouchTime == 0L) {
+            return Pair(0f, 0f)
+        }
+        
+        val timeDelta = currentTime - lastTouchTime
+        if (timeDelta <= 0) {
+            return Pair(0f, 0f)
+        }
+        
+        val velocityX = ((currentX - lastTouchX) / timeDelta) * 1000
+        val velocityY = ((currentY - lastTouchY) / timeDelta) * 1000
+        
+        return Pair(velocityX, velocityY)
+    }
+    
+    /**
+     * 获取指针类型
+     */
+    private fun getPointerType(event: MotionEvent): String {
+        return when (event.getToolType(0)) {
+            MotionEvent.TOOL_TYPE_FINGER -> "touch"
+            MotionEvent.TOOL_TYPE_STYLUS -> "stylus"
+            MotionEvent.TOOL_TYPE_MOUSE -> "mouse"
+            else -> "touch"
+        }
     }
 
     private fun sendDeviceInfo(width: Int, height: Int) {
+        // 判断屏幕方向
+        screenOrientation = if (width > height) "landscape" else "portrait"
+        
         val params: WritableMap = Arguments.createMap()
         params.putInt("width", width)
         params.putInt("height", height)
+        params.putString("orientation", screenOrientation)
         sendEvent("onDeviceInfo", params)
     }
 
@@ -424,16 +598,239 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
             floatingView?.let { view ->
                 val startButton = view.findViewById<Button>(R.id.startButton)
                 val stopButton = view.findViewById<Button>(R.id.stopButton)
+                val playButton = view.findViewById<Button>(R.id.playButton)
 
                 if (isRecording) {
                     startButton?.visibility = View.GONE
                     stopButton?.visibility = View.VISIBLE
+                    playButton?.visibility = View.GONE  // 录制时隐藏执行按钮
                 } else {
                     startButton?.visibility = View.VISIBLE
                     stopButton?.visibility = View.GONE
+                    // 执行按钮的显示由 setPlayButtonVisible 控制
                 }
             }
         }
+    }
+    
+    /**
+     * 设置执行按钮是否可见
+     */
+    @ReactMethod
+    fun setPlayButtonVisible(visible: Boolean) {
+        reactContext.currentActivity?.runOnUiThread {
+            floatingView?.let { view ->
+                val playButton = view.findViewById<Button>(R.id.playButton)
+                playButton?.visibility = if (visible) View.VISIBLE else View.GONE
+            }
+        }
+    }
+    
+    /**
+     * 更新执行状态（执行中/已停止）
+     */
+    @ReactMethod
+    fun updatePlayingState(playing: Boolean) {
+        isPlaying = playing
+        reactContext.currentActivity?.runOnUiThread {
+            floatingView?.let { view ->
+                val startButton = view.findViewById<Button>(R.id.startButton)
+                val playButton = view.findViewById<Button>(R.id.playButton)
+                val timeTextView = view.findViewById<TextView>(R.id.timeText)
+
+                if (playing) {
+                    startButton?.visibility = View.GONE
+                    playButton?.text = "⏹ 停止"
+                    playButton?.setBackgroundResource(R.drawable.button_stop)
+                } else {
+                    startButton?.visibility = View.VISIBLE
+                    playButton?.text = "▶ 执行"
+                    playButton?.setBackgroundResource(R.drawable.button_play)
+                    timeTextView?.text = "00:00"
+                }
+            }
+        }
+    }
+    
+    /**
+     * 执行录制的操作序列
+     * @param actions 操作数组，每个操作包含 type, x, y, timestamp, duration 等信息
+     * @param screenWidth 录制时的屏幕宽度
+     * @param screenHeight 录制时的屏幕高度
+     */
+    @ReactMethod
+    fun executeActions(actions: ReadableArray, screenWidth: Int, screenHeight: Int) {
+        if (actions.size() == 0) {
+            android.util.Log.w("FloatingWindow", "没有可执行的操作")
+            return
+        }
+        
+        if (!TouchAccessibilityService.isServiceEnabled()) {
+            android.util.Log.w("FloatingWindow", "无障碍服务未启用，无法执行操作")
+            sendEvent("onPlaybackError", Arguments.createMap().apply {
+                putString("error", "无障碍服务未启用")
+            })
+            return
+        }
+        
+        isPlaying = true
+        currentPlaybackIndex = 0
+        playbackHandler = Handler(Looper.getMainLooper())
+        
+        // 获取当前屏幕尺寸用于坐标适配
+        val displayMetrics = DisplayMetrics()
+        windowManager?.defaultDisplay?.getMetrics(displayMetrics)
+        val currentWidth = displayMetrics.widthPixels
+        val currentHeight = displayMetrics.heightPixels
+        
+        android.util.Log.d("FloatingWindow", "开始执行 ${actions.size()} 个操作")
+        android.util.Log.d("FloatingWindow", "录制屏幕: ${screenWidth}x${screenHeight}, 当前屏幕: ${currentWidth}x${currentHeight}")
+        
+        // 发送开始事件
+        sendEvent("onPlaybackStart", Arguments.createMap().apply {
+            putInt("totalActions", actions.size())
+        })
+        
+        // 开始执行第一个操作
+        executeNextAction(actions, 0, screenWidth, screenHeight, currentWidth, currentHeight)
+    }
+    
+    private fun executeNextAction(
+        actions: ReadableArray,
+        index: Int,
+        recordWidth: Int,
+        recordHeight: Int,
+        currentWidth: Int,
+        currentHeight: Int
+    ) {
+        if (!isPlaying || index >= actions.size()) {
+            // 执行完成
+            isPlaying = false
+            sendEvent("onPlaybackComplete", Arguments.createMap().apply {
+                putInt("executedCount", index)
+            })
+            return
+        }
+        
+        val action = actions.getMap(index)
+        val type = action?.getString("type") ?: return
+        val normalizedX = action.getDouble("normalizedX")
+        val normalizedY = action.getDouble("normalizedY")
+        
+        // 使用归一化坐标计算当前屏幕上的实际坐标
+        val x = (normalizedX * currentWidth).toFloat()
+        val y = (normalizedY * currentHeight).toFloat()
+        
+        // 计算与下一个操作的时间间隔
+        val currentTimestamp = action.getDouble("timestamp").toLong()
+        val nextDelay = if (index + 1 < actions.size()) {
+            val nextAction = actions.getMap(index + 1)
+            val nextTimestamp = nextAction?.getDouble("timestamp")?.toLong() ?: currentTimestamp
+            (nextTimestamp - currentTimestamp).coerceAtLeast(100)
+        } else {
+            0L
+        }
+        
+        android.util.Log.d("FloatingWindow", "执行操作 ${index + 1}/${actions.size()}: $type at ($x, $y), 下次延迟: ${nextDelay}ms")
+        
+        // 发送进度事件
+        sendEvent("onPlaybackProgress", Arguments.createMap().apply {
+            putInt("current", index + 1)
+            putInt("total", actions.size())
+            putString("type", type)
+        })
+        
+        when (type) {
+            "tap" -> {
+                TouchAccessibilityService.performTap(x, y) { success ->
+                    if (success) {
+                        android.util.Log.d("FloatingWindow", "点击成功: ($x, $y)")
+                    } else {
+                        android.util.Log.w("FloatingWindow", "点击失败: ($x, $y)")
+                    }
+                    
+                    // 延迟执行下一个操作
+                    playbackHandler?.postDelayed({
+                        executeNextAction(actions, index + 1, recordWidth, recordHeight, currentWidth, currentHeight)
+                    }, nextDelay.coerceAtLeast(100))
+                }
+            }
+            "swipe_start" -> {
+                // 查找对应的 swipe_end
+                var endIndex = index + 1
+                var endX = x
+                var endY = y
+                while (endIndex < actions.size()) {
+                    val nextAction = actions.getMap(endIndex)
+                    if (nextAction?.getString("type") == "swipe_end") {
+                        endX = (nextAction.getDouble("normalizedX") * currentWidth).toFloat()
+                        endY = (nextAction.getDouble("normalizedY") * currentHeight).toFloat()
+                        break
+                    }
+                    endIndex++
+                }
+                
+                // 计算滑动时长
+                val swipeDuration = if (endIndex < actions.size()) {
+                    val endAction = actions.getMap(endIndex)
+                    val endTimestamp = endAction?.getDouble("timestamp")?.toLong() ?: currentTimestamp
+                    (endTimestamp - currentTimestamp).coerceIn(100, 1000)
+                } else {
+                    300L
+                }
+                
+                TouchAccessibilityService.performSwipe(x, y, endX, endY, swipeDuration) { success ->
+                    if (success) {
+                        android.util.Log.d("FloatingWindow", "滑动成功")
+                    } else {
+                        android.util.Log.w("FloatingWindow", "滑动失败")
+                    }
+                    
+                    // 跳过 swipe_move 和 swipe_end，直接执行下一个非滑动操作
+                    var skipToIndex = endIndex + 1
+                    
+                    // 计算延迟（使用 swipe_end 的时间戳）
+                    val delayAfterSwipe = if (skipToIndex < actions.size()) {
+                        val swipeEndAction = actions.getMap(endIndex)
+                        val swipeEndTime = swipeEndAction?.getDouble("timestamp")?.toLong() ?: currentTimestamp
+                        val nextAction = actions.getMap(skipToIndex)
+                        val nextTime = nextAction?.getDouble("timestamp")?.toLong() ?: swipeEndTime
+                        (nextTime - swipeEndTime).coerceAtLeast(100)
+                    } else {
+                        100L
+                    }
+                    
+                    playbackHandler?.postDelayed({
+                        executeNextAction(actions, skipToIndex, recordWidth, recordHeight, currentWidth, currentHeight)
+                    }, delayAfterSwipe)
+                }
+            }
+            "swipe_move", "swipe_end" -> {
+                // 这些事件在处理 swipe_start 时已经处理了，跳过
+                playbackHandler?.postDelayed({
+                    executeNextAction(actions, index + 1, recordWidth, recordHeight, currentWidth, currentHeight)
+                }, 10)
+            }
+            else -> {
+                // 未知类型，跳过
+                playbackHandler?.postDelayed({
+                    executeNextAction(actions, index + 1, recordWidth, recordHeight, currentWidth, currentHeight)
+                }, nextDelay.coerceAtLeast(100))
+            }
+        }
+    }
+    
+    /**
+     * 停止回放
+     */
+    @ReactMethod
+    fun stopPlayback() {
+        isPlaying = false
+        playbackHandler?.removeCallbacksAndMessages(null)
+        playbackHandler = null
+        currentPlaybackIndex = 0
+        
+        sendEvent("onPlaybackStopped", null)
     }
 
     private fun setupTouchListener() {
@@ -495,6 +892,7 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
         floatingView?.let { view ->
             val startButton = view.findViewById<Button>(R.id.startButton)
             val stopButton = view.findViewById<Button>(R.id.stopButton)
+            val playButton = view.findViewById<Button>(R.id.playButton)
             val closeButton = view.findViewById<Button>(R.id.closeButton)
 
             startButton?.setOnClickListener {
@@ -504,8 +902,22 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
             stopButton?.setOnClickListener {
                 sendEvent("onStopRecording", null)
             }
+            
+            playButton?.setOnClickListener {
+                if (isPlaying) {
+                    // 正在执行，点击停止
+                    sendEvent("onStopPlayback", null)
+                } else {
+                    // 未执行，点击开始执行
+                    sendEvent("onStartPlayback", null)
+                }
+            }
 
             closeButton?.setOnClickListener {
+                // 如果正在执行，先停止
+                if (isPlaying) {
+                    stopPlayback()
+                }
                 // 直接关闭悬浮窗
                 hideFloatingWindowInternal()
                 sendEvent("onClose", null)

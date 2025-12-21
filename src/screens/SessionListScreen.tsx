@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
+  Pressable,
   TouchableOpacity,
   Alert,
-  SafeAreaView,
   StatusBar,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import TouchRecorder, { RecordingSession } from '../utils/TouchRecorder';
 import colors from '../theme/colors';
 
@@ -18,7 +20,22 @@ interface SessionItemProps {
   onDelete: () => void;
 }
 
-const SessionItem: React.FC<SessionItemProps> = ({ session, onPress, onDelete }) => {
+// 格式化时间为 YYYY-MM-DD HH:mm:ss
+const formatDateTime = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const mins = String(date.getMinutes()).padStart(2, '0');
+  const secs = String(date.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${mins}:${secs}`;
+};
+
+const SessionItem: React.FC<SessionItemProps> = ({
+  session,
+  onPress,
+  onDelete,
+}) => {
   const stats = TouchRecorder.getSessionStats(session);
   const startDate = new Date(session.startTime);
   const duration = Math.floor(stats.duration / 1000);
@@ -26,23 +43,34 @@ const SessionItem: React.FC<SessionItemProps> = ({ session, onPress, onDelete })
   const seconds = duration % 60;
 
   return (
-    <TouchableOpacity style={styles.sessionItem} onPress={onPress}>
+    <Pressable
+      style={({ pressed }) => [
+        styles.sessionItem,
+        pressed && styles.sessionItemPressed,
+      ]}
+      onPress={onPress}
+      android_ripple={{ color: 'rgba(102, 126, 234, 0.15)', borderless: false }}
+    >
       <View style={styles.sessionHeader}>
-        <Text style={styles.sessionTitle}>
-          {startDate.toLocaleDateString()} {startDate.toLocaleTimeString()}
-        </Text>
-        <TouchableOpacity
-          style={styles.deleteButton}
+        <Text style={styles.sessionTitle}>{formatDateTime(startDate)}</Text>
+        <Pressable
+          style={({ pressed }) => [
+            styles.deleteButton,
+            pressed && styles.deleteButtonPressed,
+          ]}
           onPress={onDelete}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          android_ripple={{ color: 'rgba(255, 71, 87, 0.2)', borderless: true }}
         >
           <Text style={styles.deleteButtonText}>🗑️</Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
-      
+
       <View style={styles.statsContainer}>
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{minutes}:{seconds.toString().padStart(2, '0')}</Text>
+          <Text style={styles.statValue}>
+            {minutes}:{seconds.toString().padStart(2, '0')}
+          </Text>
           <Text style={styles.statLabel}>时长</Text>
         </View>
         <View style={styles.statItem}>
@@ -58,26 +86,30 @@ const SessionItem: React.FC<SessionItemProps> = ({ session, onPress, onDelete })
           <Text style={styles.statLabel}>滑动</Text>
         </View>
       </View>
-    </TouchableOpacity>
+    </Pressable>
   );
 };
 
 export const SessionListScreen: React.FC = () => {
   const [sessions, setSessions] = useState<RecordingSession[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const insets = useSafeAreaInsets();
 
-  const loadSessions = async () => {
+  const loadSessions = useCallback(async () => {
     setRefreshing(true);
     const allSessions = await TouchRecorder.getAllSessions();
     // 按时间倒序排列
     allSessions.sort((a, b) => b.startTime - a.startTime);
     setSessions(allSessions);
     setRefreshing(false);
-  };
-
-  useEffect(() => {
-    loadSessions();
   }, []);
+
+  // 每次页面获得焦点时刷新数据
+  useFocusEffect(
+    useCallback(() => {
+      loadSessions();
+    }, [loadSessions]),
+  );
 
   const handleSessionPress = (session: RecordingSession) => {
     const stats = TouchRecorder.getSessionStats(session);
@@ -89,11 +121,11 @@ export const SessionListScreen: React.FC = () => {
     Alert.alert(
       '会话详情',
       `开始时间: ${startDate.toLocaleString()}\n` +
-      `时长: ${minutes}:${seconds.toString().padStart(2, '0')}\n` +
-      `总触摸事件: ${stats.totalTouches}\n` +
-      `点击次数: ${stats.taps}\n` +
-      `滑动次数: ${stats.swipes}\n` +
-      `设备分辨率: ${session.deviceInfo.width}x${session.deviceInfo.height}`,
+        `时长: ${minutes}:${seconds.toString().padStart(2, '0')}\n` +
+        `总触摸事件: ${stats.totalTouches}\n` +
+        `点击次数: ${stats.taps}\n` +
+        `滑动次数: ${stats.swipes}\n` +
+        `设备分辨率: ${session.deviceInfo.width}x${session.deviceInfo.height}`,
       [
         {
           text: '导出JSON',
@@ -109,21 +141,17 @@ export const SessionListScreen: React.FC = () => {
   };
 
   const handleDeleteSession = (session: RecordingSession) => {
-    Alert.alert(
-      '确认删除',
-      '确定要删除这个会话吗？',
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '删除',
-          style: 'destructive',
-          onPress: async () => {
-            await TouchRecorder.deleteSession(session.id);
-            loadSessions();
-          },
+    Alert.alert('确认删除', '确定要删除这个会话吗？', [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '删除',
+        style: 'destructive',
+        onPress: async () => {
+          await TouchRecorder.deleteSession(session.id);
+          loadSessions();
         },
-      ],
-    );
+      },
+    ]);
   };
 
   const handleClearAll = () => {
@@ -132,48 +160,40 @@ export const SessionListScreen: React.FC = () => {
       return;
     }
 
-    Alert.alert(
-      '确认清空',
-      '确定要删除所有会话吗？此操作无法撤销。',
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '清空',
-          style: 'destructive',
-          onPress: async () => {
-            await TouchRecorder.clearAllSessions();
-            loadSessions();
-          },
+    Alert.alert('确认清空', '确定要删除所有会话吗？此操作无法撤销。', [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '清空',
+        style: 'destructive',
+        onPress: async () => {
+          await TouchRecorder.clearAllSessions();
+          loadSessions();
         },
-      ],
-    );
+      },
+    ]);
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-      
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>录制会话</Text>
-        <TouchableOpacity
-          style={styles.clearButton}
-          onPress={handleClearAll}
-          disabled={sessions.length === 0}
-        >
-          <Text style={[
-            styles.clearButtonText,
-            sessions.length === 0 && styles.clearButtonTextDisabled,
-          ]}>
-            清空全部
-          </Text>
-        </TouchableOpacity>
-      </View>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#667eea" />
+
+      {/* 清空按钮区域 */}
+      {sessions.length > 0 && (
+        <View style={styles.actionBar}>
+          <Text style={styles.sessionCount}>共 {sessions.length} 个脚本</Text>
+          <TouchableOpacity style={styles.clearButton} onPress={handleClearAll}>
+            <Text style={styles.clearButtonText}>清空全部</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {sessions.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyIcon}>📝</Text>
-          <Text style={styles.emptyText}>还没有录制会话</Text>
-          <Text style={styles.emptySubtext}>开始录制自动任务来创建会话</Text>
+          <Text style={styles.emptyText}>还没有录制脚本</Text>
+          <Text style={styles.emptySubtext}>
+            点击首页 Banner 开始录制自动化脚本
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -188,10 +208,14 @@ export const SessionListScreen: React.FC = () => {
           )}
           refreshing={refreshing}
           onRefresh={loadSessions}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: 16 + insets.bottom },
+          ]}
+          showsVerticalScrollIndicator={false}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -200,37 +224,30 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+  actionBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
+  sessionCount: {
+    fontSize: 14,
+    color: '#666',
   },
   clearButton: {
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: '#ff4757',
   },
   clearButtonText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-  },
-  clearButtonTextDisabled: {
-    opacity: 0.5,
   },
   listContent: {
     padding: 16,
@@ -245,6 +262,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
+    overflow: 'hidden',
+  },
+  sessionItemPressed: {
+    backgroundColor: '#f0f4ff',
+    transform: [{ scale: 0.98 }],
   },
   sessionHeader: {
     flexDirection: 'row',
@@ -259,7 +281,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   deleteButton: {
-    padding: 4,
+    padding: 8,
+    borderRadius: 20,
+  },
+  deleteButtonPressed: {
+    backgroundColor: 'rgba(255, 71, 87, 0.1)',
   },
   deleteButtonText: {
     fontSize: 18,
@@ -303,4 +329,3 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
-

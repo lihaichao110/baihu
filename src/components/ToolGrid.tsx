@@ -6,6 +6,9 @@ import {
   TouchableOpacity,
   Dimensions,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../App';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GAP = 15;
@@ -23,6 +26,7 @@ interface ToolItemProps {
   iconBgColor?: string;
   isBarcode?: boolean;
   cardBackground?: string;
+  onPress?: () => void;
 }
 
 const ToolItem = ({
@@ -32,10 +36,12 @@ const ToolItem = ({
   iconBgColor,
   isBarcode,
   cardBackground,
+  onPress,
 }: ToolItemProps) => {
   return (
     <TouchableOpacity
       activeOpacity={0.9}
+      onPress={onPress}
       style={[
         styles.card,
         {
@@ -65,7 +71,15 @@ const ToolItem = ({
   );
 };
 
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
 export const ToolGrid = () => {
+  const navigation = useNavigation<NavigationProp>();
+
+  const handleScriptCollectionPress = () => {
+    navigation.navigate('SessionList');
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.sectionTitle}>常用工具</Text>
@@ -79,25 +93,26 @@ export const ToolGrid = () => {
           cardBackground="#E8EAF6"
         />
         <ToolItem
-          title="旋转指针"
-          icon="💧"
-          color="#a855f7" // Darker purple text
-          iconBgColor="#d8b4fe" // Lighter purple icon bg
-          cardBackground="#F3E8FF" // Light purple card bg
+          title="脚本集合"
+          icon="📋"
+          color="#a855f7"
+          iconBgColor="#d8b4fe"
+          cardBackground="#F3E8FF"
+          onPress={handleScriptCollectionPress}
         />
         <ToolItem
           title="便捷白板"
           icon="📺"
-          color="#0d9488" // Teal text
-          iconBgColor="#99f6e4" // Light teal icon bg
-          cardBackground="#E0F2F1" // Light teal card bg
+          color="#0d9488"
+          iconBgColor="#99f6e4"
+          cardBackground="#E0F2F1"
         />
         <ToolItem
           title="随机生成密码"
           icon="🔒"
-          color="#16a34a" // Green text
-          iconBgColor="#86efac" // Light green icon bg
-          cardBackground="#DCFCE7" // Light green card bg
+          color="#16a34a"
+          iconBgColor="#86efac"
+          cardBackground="#DCFCE7"
         />
       </View>
     </View>

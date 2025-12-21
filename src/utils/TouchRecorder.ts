@@ -1,43 +1,100 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export interface TouchRecord {
-  x: number;
-  y: number;
-  timestamp: number;
-  type: 'tap' | 'swipe_start' | 'swipe_move' | 'swipe_end';
+// 操作类型
+export type ActionType = 'tap' | 'swipe_start' | 'swipe_move' | 'swipe_end';
+
+// 坐标信息（包含原始坐标和归一化坐标）
+export interface Coordinates {
+  x: number;           // 原始 X 坐标（像素）
+  y: number;           // 原始 Y 坐标（像素）
+  normalizedX: number; // 归一化 X 坐标（0-1）
+  normalizedY: number; // 归一化 Y 坐标（0-1）
 }
 
+// 触摸元数据
+export interface TouchMeta {
+  pointerType: 'touch' | 'stylus' | 'mouse'; // 指针类型
+  pressure: number;    // 压力值（0-1）
+  velocityX: number;   // X 方向速度（像素/秒）
+  velocityY: number;   // Y 方向速度（像素/秒）
+}
+
+// 单个动作记录
+export interface ActionRecord {
+  type: ActionType;
+  timestamp: number;   // 毫秒时间戳
+  coordinates: Coordinates;
+  meta: TouchMeta;
+}
+
+// 设备信息（支持横屏）
+export interface DeviceInfo {
+  width: number;       // 屏幕宽度（像素）
+  height: number;      // 屏幕高度（像素）
+  orientation: 'portrait' | 'landscape'; // 屏幕方向
+}
+
+// 录制会话
 export interface RecordingSession {
   id: string;
   startTime: number;
   endTime?: number;
-  touches: TouchRecord[];
-  deviceInfo: {
-    width: number;
-    height: number;
-  };
+  actions: ActionRecord[];
+  deviceInfo: DeviceInfo;
+}
+
+// 兼容旧的 TouchRecord 接口（供外部调用时使用）
+export interface TouchRecord {
+  x: number;
+  y: number;
+  timestamp: number;
+  type: ActionType;
+  pressure?: number;
+  pointerType?: 'touch' | 'stylus' | 'mouse';
+  velocityX?: number;
+  velocityY?: number;
 }
 
 class TouchRecorder {
   private currentSession: RecordingSession | null = null;
   private isRecording: boolean = false;
+  private lastTouchTime: number = 0;
+  private lastTouchX: number = 0;
+  private lastTouchY: number = 0;
 
   /**
    * 开始新的录制会话
+   * @param deviceWidth 设备屏幕宽度
+   * @param deviceHeight 设备屏幕高度
+   * @param orientation 屏幕方向（可选，默认根据宽高比自动判断）
    */
-  startRecording(deviceWidth: number, deviceHeight: number): void {
+  startRecording(
+    deviceWidth: number,
+    deviceHeight: number,
+    orientation?: 'portrait' | 'landscape',
+  ): void {
     const sessionId = `session_${Date.now()}`;
+    // 自动判断屏幕方向
+    const screenOrientation =
+      orientation || (deviceWidth > deviceHeight ? 'landscape' : 'portrait');
+
     this.currentSession = {
       id: sessionId,
       startTime: Date.now(),
-      touches: [],
+      actions: [],
       deviceInfo: {
         width: deviceWidth,
         height: deviceHeight,
+        orientation: screenOrientation,
       },
     };
     this.isRecording = true;
-    console.log(`开始录制会话: ${sessionId}`);
+    this.lastTouchTime = 0;
+    this.lastTouchX = 0;
+    this.lastTouchY = 0;
+    console.log(
+      `开始录制会话: ${sessionId}, 屏幕方向: ${screenOrientation}, 尺寸: ${deviceWidth}x${deviceHeight}`,
+    );
   }
 
   /**
@@ -49,8 +106,53 @@ class TouchRecorder {
       return;
     }
 
-    this.currentSession.touches.push(record);
-    console.log(`记录触摸事件: ${record.type} at (${record.x.toFixed(0)}, ${record.y.toFixed(0)})`);
+    const { width, height } = this.currentSession.deviceInfo;
+
+    // 计算速度（像素/秒）
+    const timeDelta = record.timestamp - this.lastTouchTime;
+    let velocityX = record.velocityX ?? 0;
+    let velocityY = record.velocityY ?? 0;
+
+    // 如果没有提供速度，根据位置变化计算
+    if (
+      velocityX === 0 &&
+      velocityY === 0 &&
+      this.lastTouchTime > 0 &&
+      timeDelta > 0
+    ) {
+      velocityX = ((record.x - this.lastTouchX) / timeDelta) * 1000;
+      velocityY = ((record.y - this.lastTouchY) / timeDelta) * 1000;
+    }
+
+    // 构建 ActionRecord
+    const actionRecord: ActionRecord = {
+      type: record.type,
+      timestamp: record.timestamp,
+      coordinates: {
+        x: record.x,
+        y: record.y,
+        normalizedX: width > 0 ? record.x / width : 0,
+        normalizedY: height > 0 ? record.y / height : 0,
+      },
+      meta: {
+        pointerType: record.pointerType ?? 'touch',
+        pressure: record.pressure ?? 0,
+        velocityX: velocityX,
+        velocityY: velocityY,
+      },
+    };
+
+    this.currentSession.actions.push(actionRecord);
+
+    // 更新上次触摸信息
+    this.lastTouchTime = record.timestamp;
+    this.lastTouchX = record.x;
+    this.lastTouchY = record.y;
+
+    console.log(
+      `记录触摸事件: ${record.type} at (${record.x.toFixed(0)}, ${record.y.toFixed(0)}) ` +
+      `normalized: (${actionRecord.coordinates.normalizedX.toFixed(3)}, ${actionRecord.coordinates.normalizedY.toFixed(3)})`,
+    );
   }
 
   /**
@@ -71,7 +173,9 @@ class TouchRecorder {
     const session = this.currentSession;
     this.currentSession = null;
 
-    console.log(`停止录制会话: ${session.id}, 共记录 ${session.touches.length} 个触摸事件`);
+    console.log(
+      `停止录制会话: ${session.id}, 共记录 ${session.actions.length} 个操作`,
+    );
     return session;
   }
 
@@ -121,7 +225,13 @@ class TouchRecorder {
           `touch_session_${sessionId}`,
         );
         if (sessionJson) {
-          sessions.push(JSON.parse(sessionJson));
+          const session = JSON.parse(sessionJson);
+          // 确保会话数据有效（包含必要字段）
+          if (session && session.id && Array.isArray(session.actions)) {
+            sessions.push(session);
+          } else {
+            console.warn(`会话数据无效，跳过: ${sessionId}`);
+          }
         }
       }
 
@@ -208,20 +318,22 @@ class TouchRecorder {
     taps: number;
     swipes: number;
     duration: number;
+    orientation: 'portrait' | 'landscape';
   } {
-    const taps = session.touches.filter(t => t.type === 'tap').length;
-    const swipeStarts = session.touches.filter(
-      t => t.type === 'swipe_start',
-    ).length;
+    // 确保 actions 存在且为数组
+    const actions = session.actions || [];
+    const taps = actions.filter(a => a.type === 'tap').length;
+    const swipeStarts = actions.filter(a => a.type === 'swipe_start').length;
     const duration = session.endTime
       ? session.endTime - session.startTime
       : Date.now() - session.startTime;
 
     return {
-      totalTouches: session.touches.length,
+      totalTouches: actions.length,
       taps,
       swipes: swipeStarts,
       duration,
+      orientation: session.deviceInfo?.orientation || 'portrait',
     };
   }
 
