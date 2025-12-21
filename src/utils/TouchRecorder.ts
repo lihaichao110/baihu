@@ -37,6 +37,7 @@ export interface DeviceInfo {
 // 录制会话
 export interface RecordingSession {
   id: string;
+  name?: string;          // 脚本名称（用户自定义）
   startTime: number;
   endTime?: number;
   actions: ActionRecord[];
@@ -156,9 +157,9 @@ class TouchRecorder {
   }
 
   /**
-   * 停止录制并保存会话
+   * 停止录制（不保存，返回会话供后续处理）
    */
-  async stopRecording(): Promise<RecordingSession | null> {
+  stopRecording(): RecordingSession | null {
     if (!this.isRecording || !this.currentSession) {
       console.warn('当前没有进行中的录制会话');
       return null;
@@ -166,9 +167,6 @@ class TouchRecorder {
 
     this.currentSession.endTime = Date.now();
     this.isRecording = false;
-
-    // 保存到本地存储
-    await this.saveSession(this.currentSession);
 
     const session = this.currentSession;
     this.currentSession = null;
@@ -180,9 +178,17 @@ class TouchRecorder {
   }
 
   /**
+   * 保存会话（带脚本名称）
+   */
+  async saveSessionWithName(session: RecordingSession, name: string): Promise<void> {
+    session.name = name;
+    await this.saveSession(session);
+  }
+
+  /**
    * 保存会话到本地存储
    */
-  private async saveSession(session: RecordingSession): Promise<void> {
+  async saveSession(session: RecordingSession): Promise<void> {
     try {
       // 保存当前会话
       await AsyncStorage.setItem(

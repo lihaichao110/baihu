@@ -42,6 +42,10 @@ const SessionItem: React.FC<SessionItemProps> = ({
   const minutes = Math.floor(duration / 60);
   const seconds = duration % 60;
 
+  // 显示脚本名称，如果没有则显示时间
+  const displayName = session.name || formatDateTime(startDate);
+  const hasName = !!session.name;
+
   return (
     <Pressable
       style={({ pressed }) => [
@@ -52,7 +56,16 @@ const SessionItem: React.FC<SessionItemProps> = ({
       android_ripple={{ color: 'rgba(102, 126, 234, 0.15)', borderless: false }}
     >
       <View style={styles.sessionHeader}>
-        <Text style={styles.sessionTitle}>{formatDateTime(startDate)}</Text>
+        <View style={styles.sessionTitleContainer}>
+          <Text style={styles.sessionTitle} numberOfLines={1}>
+            {displayName}
+          </Text>
+          {hasName && (
+            <Text style={styles.sessionSubtitle}>
+              {formatDateTime(startDate)}
+            </Text>
+          )}
+        </View>
         <Pressable
           style={({ pressed }) => [
             styles.deleteButton,
@@ -271,14 +284,22 @@ const styles = StyleSheet.create({
   sessionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 12,
+  },
+  sessionTitleContainer: {
+    flex: 1,
+    marginRight: 8,
   },
   sessionTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
-    flex: 1,
+  },
+  sessionSubtitle: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 4,
   },
   deleteButton: {
     padding: 8,

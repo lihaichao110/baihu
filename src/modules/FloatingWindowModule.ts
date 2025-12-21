@@ -58,12 +58,12 @@ export interface FloatingWindowModuleInterface {
   hideFloatingWindow(): void;
   showOverlay(): void;
   hideOverlay(): void;
-  updateTime(timeText: string): void;
   updateRecordingState(isRecording: boolean): void;
   isAccessibilityServiceEnabled(): Promise<boolean>;
   openAccessibilitySettings(): void;
   // 回放相关
   setPlayButtonVisible(visible: boolean): void;
+  setSaveButtonVisible(visible: boolean): void;
   updatePlayingState(playing: boolean): void;
   executeActions(actions: PlaybackAction[], screenWidth: number, screenHeight: number): void;
   stopPlayback(): void;
@@ -103,12 +103,6 @@ class FloatingWindowModuleWrapper implements FloatingWindowModuleInterface {
     }
   }
 
-  updateTime(timeText: string): void {
-    if (FloatingWindowModule) {
-      FloatingWindowModule.updateTime(timeText);
-    }
-  }
-
   updateRecordingState(isRecording: boolean): void {
     if (FloatingWindowModule) {
       FloatingWindowModule.updateRecordingState(isRecording);
@@ -131,6 +125,12 @@ class FloatingWindowModuleWrapper implements FloatingWindowModuleInterface {
   setPlayButtonVisible(visible: boolean): void {
     if (FloatingWindowModule) {
       FloatingWindowModule.setPlayButtonVisible(visible);
+    }
+  }
+
+  setSaveButtonVisible(visible: boolean): void {
+    if (FloatingWindowModule) {
+      FloatingWindowModule.setSaveButtonVisible(visible);
     }
   }
 

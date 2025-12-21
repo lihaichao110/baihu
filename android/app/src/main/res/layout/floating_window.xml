@@ -11,18 +11,17 @@
     android:paddingBottom="8dp"
     android:elevation="8dp">
 
-    <!-- 时间显示 -->
+    <!-- 拖拽把手（状态指示器） -->
     <TextView
-        android:id="@+id/timeText"
+        android:id="@+id/dragHandle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="00:00"
-        android:textSize="14sp"
-        android:textColor="#FFFFFF"
-        android:fontFamily="monospace"
-        android:textStyle="bold"
+        android:text="⋮⋮⋮"
+        android:textSize="12sp"
+        android:textColor="#888888"
         android:gravity="center"
-        android:paddingVertical="4dp" />
+        android:paddingVertical="4dp"
+        android:letterSpacing="0.3" />
 
     <!-- 开始按钮 -->
     <Button
@@ -57,6 +56,18 @@
         android:textSize="10sp"
         android:textColor="#FFFFFF"
         android:background="@drawable/button_play"
+        android:layout_marginTop="4dp"
+        android:visibility="gone" />
+
+    <!-- 保存按钮 -->
+    <Button
+        android:id="@+id/saveButton"
+        android:layout_width="match_parent"
+        android:layout_height="28dp"
+        android:text="💾 保存"
+        android:textSize="10sp"
+        android:textColor="#FFFFFF"
+        android:background="@drawable/button_save"
         android:layout_marginTop="4dp"
         android:visibility="gone" />
 

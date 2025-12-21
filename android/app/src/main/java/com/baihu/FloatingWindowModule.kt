@@ -191,7 +191,6 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
                 bringFloatingWindowToFront()
                 isOverlayShowing = true
                 touchCount = 0
-                updateTouchCountDisplay()
 
                 // 设置触摸事件监听
                 setupOverlayTouchListener()
@@ -303,7 +302,6 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
                                 0f
                             )
                             touchCount++
-                            updateTouchCountDisplay()
                         }
                         
                         if (isSwiping) {
@@ -365,7 +363,6 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
                                 0f
                             )
                             touchCount++
-                            updateTouchCountDisplay()
                         }
                         
                         // 重置速度计算
@@ -507,12 +504,6 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
-    private fun updateTouchCountDisplay() {
-        overlayView?.let { view ->
-            val touchCountText = view.findViewById<TextView>(R.id.touchCountText)
-            touchCountText?.text = "已记录: $touchCount 个操作"
-        }
-    }
 
     private fun sendTouchEvent(
         type: String, 
@@ -583,31 +574,26 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
-    fun updateTime(timeText: String) {
-        reactContext.currentActivity?.runOnUiThread {
-            floatingView?.let { view ->
-                val timeTextView = view.findViewById<TextView>(R.id.timeText)
-                timeTextView?.text = timeText
-            }
-        }
-    }
-
-    @ReactMethod
     fun updateRecordingState(isRecording: Boolean) {
         reactContext.currentActivity?.runOnUiThread {
             floatingView?.let { view ->
                 val startButton = view.findViewById<Button>(R.id.startButton)
                 val stopButton = view.findViewById<Button>(R.id.stopButton)
                 val playButton = view.findViewById<Button>(R.id.playButton)
+                val dragHandle = view.findViewById<TextView>(R.id.dragHandle)
 
                 if (isRecording) {
                     startButton?.visibility = View.GONE
                     stopButton?.visibility = View.VISIBLE
                     playButton?.visibility = View.GONE  // 录制时隐藏执行按钮
+                    // 更新拖拽把手颜色为红色（录制中）
+                    dragHandle?.setTextColor(0xFFFF4444.toInt())
                 } else {
                     startButton?.visibility = View.VISIBLE
                     stopButton?.visibility = View.GONE
                     // 执行按钮的显示由 setPlayButtonVisible 控制
+                    // 更新拖拽把手颜色为灰色（待机）
+                    dragHandle?.setTextColor(0xFF888888.toInt())
                 }
             }
         }
@@ -627,6 +613,19 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
     }
     
     /**
+     * 设置保存按钮是否可见
+     */
+    @ReactMethod
+    fun setSaveButtonVisible(visible: Boolean) {
+        reactContext.currentActivity?.runOnUiThread {
+            floatingView?.let { view ->
+                val saveButton = view.findViewById<Button>(R.id.saveButton)
+                saveButton?.visibility = if (visible) View.VISIBLE else View.GONE
+            }
+        }
+    }
+    
+    /**
      * 更新执行状态（执行中/已停止）
      */
     @ReactMethod
@@ -636,17 +635,20 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
             floatingView?.let { view ->
                 val startButton = view.findViewById<Button>(R.id.startButton)
                 val playButton = view.findViewById<Button>(R.id.playButton)
-                val timeTextView = view.findViewById<TextView>(R.id.timeText)
+                val dragHandle = view.findViewById<TextView>(R.id.dragHandle)
 
                 if (playing) {
                     startButton?.visibility = View.GONE
                     playButton?.text = "⏹ 停止"
                     playButton?.setBackgroundResource(R.drawable.button_stop)
+                    // 更新拖拽把手颜色为绿色（执行中）
+                    dragHandle?.setTextColor(0xFF44CC44.toInt())
                 } else {
                     startButton?.visibility = View.VISIBLE
                     playButton?.text = "▶ 执行"
                     playButton?.setBackgroundResource(R.drawable.button_play)
-                    timeTextView?.text = "00:00"
+                    // 更新拖拽把手颜色为灰色（待机）
+                    dragHandle?.setTextColor(0xFF888888.toInt())
                 }
             }
         }
@@ -893,6 +895,7 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
             val startButton = view.findViewById<Button>(R.id.startButton)
             val stopButton = view.findViewById<Button>(R.id.stopButton)
             val playButton = view.findViewById<Button>(R.id.playButton)
+            val saveButton = view.findViewById<Button>(R.id.saveButton)
             val closeButton = view.findViewById<Button>(R.id.closeButton)
 
             startButton?.setOnClickListener {
@@ -912,6 +915,13 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
                     sendEvent("onStartPlayback", null)
                 }
             }
+            
+            saveButton?.setOnClickListener {
+                // 点击保存，先将应用带到前台
+                bringAppToForeground()
+                // 发送保存事件
+                sendEvent("onSaveRecording", null)
+            }
 
             closeButton?.setOnClickListener {
                 // 如果正在执行，先停止
@@ -921,6 +931,25 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
                 // 直接关闭悬浮窗
                 hideFloatingWindowInternal()
                 sendEvent("onClose", null)
+            }
+        }
+    }
+    
+    /**
+     * 将应用带到前台
+     */
+    private fun bringAppToForeground() {
+        reactContext.currentActivity?.let { activity ->
+            val intent = Intent(activity, activity.javaClass)
+            intent.flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_NEW_TASK
+            activity.startActivity(intent)
+        } ?: run {
+            // 如果没有 currentActivity，尝试通过包名启动
+            val packageName = reactContext.packageName
+            val launchIntent = reactContext.packageManager.getLaunchIntentForPackage(packageName)
+            launchIntent?.let {
+                it.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                reactContext.startActivity(it)
             }
         }
     }

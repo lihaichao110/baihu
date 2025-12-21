@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   ScrollView,
   View,
@@ -7,6 +7,10 @@ import {
   Alert,
   Platform,
   NativeModules,
+  Modal,
+  Text,
+  TextInput,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Header } from '../components/Header';
@@ -33,20 +37,17 @@ const { OverlayPermissionModule } = NativeModules;
 
 export const HomeScreen = () => {
   const [isTaskRunning, setIsTaskRunning] = useState(false);
-  const [elapsedTime, setElapsedTime] = useState(0);
   const [isFloatingWindowVisible, setIsFloatingWindowVisible] = useState(false);
   const [isAccessibilityEnabled, setIsAccessibilityEnabled] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [lastSession, setLastSession] = useState<RecordingSession | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs
-      .toString()
-      .padStart(2, '0')}`;
-  };
+  // 待保存的会话（未保存到本地）
+  const [pendingSession, setPendingSession] = useState<RecordingSession | null>(
+    null,
+  );
+  // 保存弹窗相关
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [scriptName, setScriptName] = useState('');
 
   const handleAutoTaskPress = async () => {
     // 如果悬浮窗已经显示，不重复执行
@@ -112,7 +113,6 @@ export const HomeScreen = () => {
 
       // 3. 所有权限都已具备，显示原生悬浮窗
       setIsTaskRunning(false);
-      setElapsedTime(0);
       setIsFloatingWindowVisible(true);
 
       // 显示原生悬浮窗
@@ -125,15 +125,9 @@ export const HomeScreen = () => {
 
   const startRecordingInternal = useCallback(() => {
     setIsTaskRunning(true);
-    setElapsedTime(0);
 
     // 显示触摸录制浮层
     FloatingWindowModule.showOverlay();
-
-    // 启动计时器
-    intervalRef.current = setInterval(() => {
-      setElapsedTime(prev => prev + 1);
-    }, 1000);
 
     console.log('任务已开始，开始记录触摸位置');
   }, []);
@@ -171,17 +165,8 @@ export const HomeScreen = () => {
     startRecordingInternal();
   }, [startRecordingInternal]);
 
-  // 清理计时器的通用函数
-  const clearTimer = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-  }, []);
-
-  const handleEndTask = useCallback(async () => {
+  const handleEndTask = useCallback(() => {
     setIsTaskRunning(false);
-    clearTimer();
 
     // 隐藏触摸录制浮层
     FloatingWindowModule.hideOverlay();
@@ -190,47 +175,27 @@ export const HomeScreen = () => {
     const wasRecording = TouchRecorder.isCurrentlyRecording();
     console.log('结束任务时录制状态:', wasRecording);
 
-    // 停止录制并保存会话
-    const session = await TouchRecorder.stopRecording();
+    // 停止录制（不保存）
+    const session = TouchRecorder.stopRecording();
     console.log(
       '停止录制返回的会话:',
       session ? `${session.id}, 操作数: ${session.actions.length}` : 'null',
     );
 
     if (session && session.actions.length > 0) {
-      // 保存会话用于回放
+      // 保存待处理会话用于回放和保存
+      setPendingSession(session);
       setLastSession(session);
-      // 显示执行按钮
+      // 显示执行按钮和保存按钮
       FloatingWindowModule.setPlayButtonVisible(true);
+      FloatingWindowModule.setSaveButtonVisible(true);
 
-      const stats = TouchRecorder.getSessionStats(session);
-      const durationText = formatTime(Math.floor(stats.duration / 1000));
-      const orientationText =
-        stats.orientation === 'landscape' ? '横屏' : '竖屏';
-
-      Alert.alert(
-        '录制完成',
-        `会话ID: ${session.id}\n` +
-          `录制时长: ${durationText}\n` +
-          `屏幕方向: ${orientationText}\n` +
-          `屏幕尺寸: ${session.deviceInfo.width}x${session.deviceInfo.height}\n` +
-          `记录的操作数: ${stats.totalTouches}\n` +
-          `点击次数: ${stats.taps}\n` +
-          `滑动次数: ${stats.swipes}\n\n` +
-          `点击「执行」按钮可回放此操作`,
-        [
-          {
-            text: '查看详情',
-            onPress: () => {
-              console.log('会话详情:', JSON.stringify(session, null, 2));
-            },
-          },
-          { text: '确定' },
-        ],
-      );
+      console.log('录制完成，等待用户保存或执行');
     } else {
-      // 隐藏执行按钮
+      // 隐藏执行和保存按钮
       FloatingWindowModule.setPlayButtonVisible(false);
+      FloatingWindowModule.setSaveButtonVisible(false);
+      setPendingSession(null);
       // 当 session 为 null 或没有操作时显示提示
       Alert.alert(
         '录制结束',
@@ -242,12 +207,9 @@ export const HomeScreen = () => {
     }
 
     console.log('任务已结束');
-  }, [clearTimer]);
+  }, []);
 
   const handleCloseFloatingWindow = useCallback(() => {
-    // 先清理计时器
-    clearTimer();
-
     // 如果正在执行，先停止
     if (isPlaying) {
       FloatingWindowModule.stopPlayback();
@@ -256,13 +218,12 @@ export const HomeScreen = () => {
 
     // 重置状态
     setIsTaskRunning(false);
-    setElapsedTime(0);
 
     // 隐藏触摸录制浮层和原生悬浮窗
     FloatingWindowModule.hideOverlay();
     FloatingWindowModule.hideFloatingWindow();
     setIsFloatingWindowVisible(false);
-  }, [clearTimer, isPlaying]);
+  }, [isPlaying]);
 
   // 开始执行回放
   const handleStartPlayback = useCallback(() => {
@@ -284,13 +245,7 @@ export const HomeScreen = () => {
     );
 
     setIsPlaying(true);
-    setElapsedTime(0);
     FloatingWindowModule.updatePlayingState(true);
-
-    // 启动计时器
-    intervalRef.current = setInterval(() => {
-      setElapsedTime(prev => prev + 1);
-    }, 1000);
 
     // 执行操作
     FloatingWindowModule.executeActions(
@@ -303,11 +258,52 @@ export const HomeScreen = () => {
   // 停止执行回放
   const handleStopPlayback = useCallback(() => {
     console.log('停止回放');
-    clearTimer();
     setIsPlaying(false);
     FloatingWindowModule.stopPlayback();
     FloatingWindowModule.updatePlayingState(false);
-  }, [clearTimer]);
+  }, []);
+
+  // 确认保存脚本
+  const handleConfirmSave = useCallback(async () => {
+    if (!pendingSession) {
+      Alert.alert('错误', '没有待保存的录制数据');
+      setShowSaveModal(false);
+      return;
+    }
+
+    const trimmedName = scriptName.trim();
+    if (!trimmedName) {
+      Alert.alert('提示', '请输入脚本名称');
+      return;
+    }
+
+    try {
+      // 保存会话到本地
+      await TouchRecorder.saveSessionWithName(pendingSession, trimmedName);
+      console.log(`脚本已保存: ${trimmedName}`);
+
+      // 关闭弹窗
+      setShowSaveModal(false);
+      setScriptName('');
+
+      // 隐藏保存按钮（已保存）
+      FloatingWindowModule.setSaveButtonVisible(false);
+
+      // 清除待保存的会话
+      setPendingSession(null);
+
+      Alert.alert('保存成功', `脚本「${trimmedName}」已保存到本地`);
+    } catch (error) {
+      console.error('保存失败:', error);
+      Alert.alert('保存失败', '保存脚本时发生错误，请重试');
+    }
+  }, [pendingSession, scriptName]);
+
+  // 取消保存
+  const handleCancelSave = useCallback(() => {
+    setShowSaveModal(false);
+    setScriptName('');
+  }, []);
 
   // 处理自动连点器点击
   const handleAutoClickerPress = async () => {
@@ -390,13 +386,12 @@ export const HomeScreen = () => {
   // 更新悬浮窗状态
   useEffect(() => {
     if (isFloatingWindowVisible) {
-      FloatingWindowModule.updateTime(formatTime(elapsedTime));
       // 只有在非执行状态时才更新录制状态
       if (!isPlaying) {
         FloatingWindowModule.updateRecordingState(isTaskRunning);
       }
     }
-  }, [isFloatingWindowVisible, isTaskRunning, elapsedTime, isPlaying]);
+  }, [isFloatingWindowVisible, isTaskRunning, isPlaying]);
 
   // 监听悬浮窗按钮事件
   useEffect(() => {
@@ -485,7 +480,6 @@ export const HomeScreen = () => {
       'onPlaybackComplete',
       (data: PlaybackCompleteData) => {
         console.log(`执行完成，共执行 ${data.executedCount} 个操作`);
-        clearTimer();
         setIsPlaying(false);
         FloatingWindowModule.updatePlayingState(false);
         Alert.alert('执行完成', `成功执行了 ${data.executedCount} 个操作`);
@@ -497,7 +491,6 @@ export const HomeScreen = () => {
       'onPlaybackStopped',
       () => {
         console.log('执行已停止');
-        clearTimer();
         setIsPlaying(false);
         FloatingWindowModule.updatePlayingState(false);
       },
@@ -508,10 +501,27 @@ export const HomeScreen = () => {
       'onPlaybackError',
       (data: PlaybackErrorData) => {
         console.error('执行错误:', data.error);
-        clearTimer();
         setIsPlaying(false);
         FloatingWindowModule.updatePlayingState(false);
         Alert.alert('执行错误', data.error);
+      },
+    );
+
+    // 监听保存按钮事件
+    const saveRecordingListener = FloatingWindowModule.addEventListener(
+      'onSaveRecording',
+      () => {
+        console.log('保存按钮被点击');
+        // 生成默认脚本名称
+        const now = new Date();
+        const defaultName = `脚本_${now.getFullYear()}${(now.getMonth() + 1)
+          .toString()
+          .padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now
+          .getHours()
+          .toString()
+          .padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
+        setScriptName(defaultName);
+        setShowSaveModal(true);
       },
     );
 
@@ -523,6 +533,7 @@ export const HomeScreen = () => {
       touchListener.remove();
       startPlaybackListener.remove();
       stopPlaybackListener.remove();
+      saveRecordingListener.remove();
       playbackProgressListener.remove();
       playbackCompleteListener.remove();
       playbackStoppedListener.remove();
@@ -535,7 +546,6 @@ export const HomeScreen = () => {
     handleCloseFloatingWindow,
     handleStartPlayback,
     handleStopPlayback,
-    clearTimer,
   ]);
 
   // 监听无障碍服务状态变化
@@ -591,15 +601,6 @@ export const HomeScreen = () => {
     };
   }, [isFloatingWindowVisible]);
 
-  // 清理计时器
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, []);
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
@@ -645,6 +646,46 @@ export const HomeScreen = () => {
 
         <ToolGrid />
       </ScrollView>
+
+      {/* 保存脚本弹窗 */}
+      <Modal
+        visible={showSaveModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCancelSave}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>保存脚本</Text>
+            <Text style={styles.modalSubtitle}>
+              请为录制的操作命名，方便后续查找和使用
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              value={scriptName}
+              onChangeText={setScriptName}
+              placeholder="请输入脚本名称"
+              placeholderTextColor="#999"
+              autoFocus={true}
+              maxLength={50}
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={handleCancelSave}
+              >
+                <Text style={styles.modalCancelText}>取消</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalConfirmButton]}
+                onPress={handleConfirmSave}
+              >
+                <Text style={styles.modalConfirmText}>保存</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -671,5 +712,77 @@ const styles = StyleSheet.create({
   },
   greenCard: {
     backgroundColor: '#43e97b',
+  },
+  // Modal 样式
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 30,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 20,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#333',
+    backgroundColor: '#f9f9f9',
+    marginBottom: 20,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  modalCancelButton: {
+    backgroundColor: '#f0f0f0',
+  },
+  modalConfirmButton: {
+    backgroundColor: colors.primary,
+  },
+  modalCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+  },
+  modalConfirmText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
 });
