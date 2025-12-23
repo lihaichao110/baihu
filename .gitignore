@@ -50,6 +50,8 @@ local.properties
 .cxx/
 *.keystore
 !debug.keystore
+*.jks
+keystore.properties
 .kotlin/
 android/app/build/
 android/build/

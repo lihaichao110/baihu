@@ -5,6 +5,10 @@
   "private": true,
   "scripts": {
     "android": "react-native run-android",
+    "android:release": "react-native run-android --mode=release",
+    "android:build": "cd android && ./gradlew assembleRelease",
+    "android:build:debug": "cd android && ./gradlew assembleDebug",
+    "android:clean": "cd android && ./gradlew clean",
     "ios": "react-native run-ios --simulator=\"iPhone 16 Pro\"",
     "lint": "eslint .",
     "start": "react-native start",

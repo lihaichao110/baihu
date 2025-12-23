@@ -3,6 +3,7 @@ package com.baihu
 import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Handler
@@ -65,6 +66,13 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
     private var isPlaying = false
     private var playbackHandler: Handler? = null
     private var currentPlaybackIndex = 0
+    
+    // 回放视觉效果 overlay
+    private var playbackOverlayView: View? = null
+    private var playbackOverlayParams: WindowManager.LayoutParams? = null
+    private var isPlaybackOverlayShowing = false
+    private var playbackTouchCount = 0
+    private var playbackHideAnimator: android.animation.ValueAnimator? = null
 
     override fun getName(): String {
         return "FloatingWindowModule"
@@ -144,22 +152,30 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
     @ReactMethod
     fun showOverlay() {
         reactContext.currentActivity?.runOnUiThread {
-            if (isOverlayShowing) {
-                return@runOnUiThread
-            }
-
             try {
                 if (windowManager == null) {
                     windowManager = reactContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
                 }
 
-                // 创建覆盖层视图
-                overlayView = LayoutInflater.from(reactContext)
-                    .inflate(R.layout.overlay_touch_layer, null)
-
                 // 获取屏幕尺寸
                 val displayMetrics = DisplayMetrics()
                 windowManager?.defaultDisplay?.getMetrics(displayMetrics)
+                
+                // 如果 overlay 已经显示，只需重置状态并发送设备信息
+                if (isOverlayShowing) {
+                    android.util.Log.d("FloatingWindow", "Overlay 已显示，重置录制状态")
+                    // 重置触摸相关状态
+                    touchCount = 0
+                    isSwiping = false
+                    lastTouchTime = 0L
+                    // 发送设备信息以启动新录制
+                    sendDeviceInfo(displayMetrics.widthPixels, displayMetrics.heightPixels)
+                    return@runOnUiThread
+                }
+
+                // 创建覆盖层视图
+                overlayView = LayoutInflater.from(reactContext)
+                    .inflate(R.layout.overlay_touch_layer, null)
 
                 // 设置覆盖层参数 - 全屏，允许触摸穿透
                 overlayParams = WindowManager.LayoutParams(
@@ -270,7 +286,8 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
                         lastTouchY = event.rawY
                         lastTouchTime = currentTime
                         
-                        // 显示触摸指示器
+                        // 先增加点击计数，再显示指示器
+                        touchCount++
                         showTouchIndicator(touchIndicator, event.x, event.y)
                         true
                     }
@@ -301,7 +318,6 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
                                 0f, 
                                 0f
                             )
-                            touchCount++
                         }
                         
                         if (isSwiping) {
@@ -362,7 +378,6 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
                                 0f, 
                                 0f
                             )
-                            touchCount++
                         }
                         
                         // 重置速度计算
@@ -464,11 +479,22 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
+    // 用于存储当前的隐藏动画，以便取消
+    private var hideAnimator: android.animation.ValueAnimator? = null
+    
     private fun showTouchIndicator(indicator: View?, x: Float, y: Float) {
         indicator?.let {
+            // 取消之前的隐藏动画
+            hideAnimator?.cancel()
+            hideAnimator = null
+            
+            // 更新点击次数显示
+            val countLabel = it.findViewById<TextView>(R.id.touchCountLabel)
+            countLabel?.text = touchCount.toString()
+            
             it.visibility = View.VISIBLE
-            it.x = x - it.width / 2
-            it.y = y - it.height / 2
+            it.x = x - 28 * reactContext.resources.displayMetrics.density // 28dp = 56dp / 2
+            it.y = y - 28 * reactContext.resources.displayMetrics.density
             it.alpha = 1f
             it.scaleX = 0.5f
             it.scaleY = 0.5f
@@ -482,28 +508,210 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
 
     private fun updateTouchIndicator(indicator: View?, x: Float, y: Float) {
         indicator?.let {
-            it.x = x - it.width / 2
-            it.y = y - it.height / 2
+            val density = reactContext.resources.displayMetrics.density
+            it.x = x - 28 * density
+            it.y = y - 28 * density
         }
     }
 
     private fun hideTouchIndicator(indicator: View?) {
         indicator?.let {
-            it.animate()
-                .alpha(0f)
-                .scaleX(0.5f)
-                .scaleY(0.5f)
-                .setDuration(150)
-                .withEndAction {
-                    it.visibility = View.GONE
-                    it.alpha = 1f
-                    it.scaleX = 1f
-                    it.scaleY = 1f
+            // 取消之前的动画
+            hideAnimator?.cancel()
+            
+            // 创建3秒渐变消失动画
+            hideAnimator = android.animation.ValueAnimator.ofFloat(1f, 0f).apply {
+                duration = 3000 // 3秒
+                addUpdateListener { animator ->
+                    val value = animator.animatedValue as Float
+                    it.alpha = value
+                    // 同时缩小一点
+                    val scale = 0.7f + 0.3f * value
+                    it.scaleX = scale
+                    it.scaleY = scale
                 }
-                .start()
+                addListener(object : android.animation.AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: android.animation.Animator) {
+                        it.visibility = View.GONE
+                        it.alpha = 1f
+                        it.scaleX = 1f
+                        it.scaleY = 1f
+                        hideAnimator = null
+                    }
+                    override fun onAnimationCancel(animation: android.animation.Animator) {
+                        // 动画被取消时恢复状态
+                        it.alpha = 1f
+                        it.scaleX = 1f
+                        it.scaleY = 1f
+                    }
+                })
+                start()
+            }
         }
     }
 
+    /**
+     * 显示回放视觉效果 overlay（不捕获触摸）
+     */
+    private fun showPlaybackOverlay() {
+        reactContext.currentActivity?.runOnUiThread {
+            if (isPlaybackOverlayShowing && playbackOverlayView != null) {
+                // 已经显示，重置指示器状态以便复用
+                playbackOverlayView?.let { view ->
+                    val indicator = view.findViewById<View>(R.id.touchIndicator)
+                    indicator?.visibility = View.GONE
+                    indicator?.alpha = 1f
+                }
+                android.util.Log.d("FloatingWindow", "复用现有回放 overlay")
+                return@runOnUiThread
+            }
+            
+            try {
+                if (windowManager == null) {
+                    windowManager = reactContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                }
+                
+                // 创建回放 overlay 视图
+                playbackOverlayView = LayoutInflater.from(reactContext)
+                    .inflate(R.layout.overlay_touch_layer, null)
+                
+                // 设置为透明背景（回放时不需要蒙层）
+                playbackOverlayView?.findViewById<FrameLayout>(R.id.overlayTouchLayer)?.setBackgroundColor(Color.TRANSPARENT)
+                
+                // 设置参数 - 不捕获触摸事件
+                playbackOverlayParams = WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                    } else {
+                        @Suppress("DEPRECATION")
+                        WindowManager.LayoutParams.TYPE_PHONE
+                    },
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or  // 不捕获触摸
+                            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                            WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                    PixelFormat.TRANSLUCENT
+                )
+                
+                playbackOverlayParams?.apply {
+                    gravity = Gravity.TOP or Gravity.START
+                    x = 0
+                    y = 0
+                }
+                
+                windowManager?.addView(playbackOverlayView, playbackOverlayParams)
+                isPlaybackOverlayShowing = true
+                // 计数已在 executeActions 中同步重置，这里不再重置
+                
+                android.util.Log.d("FloatingWindow", "回放视觉 overlay 已显示")
+                
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+    
+    /**
+     * 隐藏回放视觉效果 overlay
+     */
+    private fun hidePlaybackOverlay() {
+        reactContext.currentActivity?.runOnUiThread {
+            playbackHideAnimator?.cancel()
+            playbackHideAnimator = null
+            
+            if (isPlaybackOverlayShowing && playbackOverlayView != null) {
+                try {
+                    windowManager?.removeView(playbackOverlayView)
+                    isPlaybackOverlayShowing = false
+                    playbackOverlayView = null
+                    playbackTouchCount = 0
+                    android.util.Log.d("FloatingWindow", "回放视觉 overlay 已隐藏")
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+    
+    /**
+     * 在回放时显示触摸指示器
+     */
+    private fun showPlaybackTouchIndicator(x: Float, y: Float) {
+        // 增加操作计数（在调用时立即增加，确保正确的序号）
+        val currentCount = ++playbackTouchCount
+        
+        reactContext.currentActivity?.runOnUiThread {
+            playbackOverlayView?.let { view ->
+                val indicator = view.findViewById<View>(R.id.touchIndicator)
+                val countLabel = view.findViewById<TextView>(R.id.touchCountLabel)
+                
+                // 取消之前的隐藏动画
+                playbackHideAnimator?.cancel()
+                playbackHideAnimator = null
+                
+                // 更新操作序号显示（使用捕获的计数值）
+                countLabel?.text = currentCount.toString()
+                
+                val density = reactContext.resources.displayMetrics.density
+                indicator?.visibility = View.VISIBLE
+                indicator?.x = x - 28 * density
+                indicator?.y = y - 28 * density
+                indicator?.alpha = 1f
+                indicator?.scaleX = 0.5f
+                indicator?.scaleY = 0.5f
+                indicator?.animate()
+                    ?.scaleX(1f)
+                    ?.scaleY(1f)
+                    ?.setDuration(100)
+                    ?.start()
+            }
+        }
+    }
+    
+    /**
+     * 隐藏回放触摸指示器（3秒渐变消失）
+     */
+    private fun hidePlaybackTouchIndicator() {
+        reactContext.currentActivity?.runOnUiThread {
+            playbackOverlayView?.let { view ->
+                val indicator = view.findViewById<View>(R.id.touchIndicator)
+                
+                indicator?.let {
+                    // 取消之前的动画
+                    playbackHideAnimator?.cancel()
+                    
+                    // 创建3秒渐变消失动画
+                    playbackHideAnimator = android.animation.ValueAnimator.ofFloat(1f, 0f).apply {
+                        duration = 3000
+                        addUpdateListener { animator ->
+                            val value = animator.animatedValue as Float
+                            it.alpha = value
+                            val scale = 0.7f + 0.3f * value
+                            it.scaleX = scale
+                            it.scaleY = scale
+                        }
+                        addListener(object : android.animation.AnimatorListenerAdapter() {
+                            override fun onAnimationEnd(animation: android.animation.Animator) {
+                                it.visibility = View.GONE
+                                it.alpha = 1f
+                                it.scaleX = 1f
+                                it.scaleY = 1f
+                                playbackHideAnimator = null
+                            }
+                            override fun onAnimationCancel(animation: android.animation.Animator) {
+                                it.alpha = 1f
+                                it.scaleX = 1f
+                                it.scaleY = 1f
+                            }
+                        })
+                        start()
+                    }
+                }
+            }
+        }
+    }
 
     private fun sendTouchEvent(
         type: String, 
@@ -677,7 +885,16 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
         
         isPlaying = true
         currentPlaybackIndex = 0
+        
+        // 取消之前的所有延迟任务（包括上一次回放的隐藏延迟）
+        playbackHandler?.removeCallbacksAndMessages(null)
         playbackHandler = Handler(Looper.getMainLooper())
+        
+        // 重置操作计数（同步执行，确保在第一个操作前完成）
+        playbackTouchCount = 0
+        
+        // 显示回放视觉效果 overlay
+        showPlaybackOverlay()
         
         // 获取当前屏幕尺寸用于坐标适配
         val displayMetrics = DisplayMetrics()
@@ -708,6 +925,10 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
         if (!isPlaying || index >= actions.size()) {
             // 执行完成
             isPlaying = false
+            // 延迟隐藏回放 overlay，让最后一个指示器有时间显示
+            playbackHandler?.postDelayed({
+                hidePlaybackOverlay()
+            }, 3500)
             sendEvent("onPlaybackComplete", Arguments.createMap().apply {
                 putInt("executedCount", index)
             })
@@ -744,12 +965,18 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
         
         when (type) {
             "tap" -> {
+                // 显示触摸指示器
+                showPlaybackTouchIndicator(x, y)
+                
                 TouchAccessibilityService.performTap(x, y) { success ->
                     if (success) {
                         android.util.Log.d("FloatingWindow", "点击成功: ($x, $y)")
                     } else {
                         android.util.Log.w("FloatingWindow", "点击失败: ($x, $y)")
                     }
+                    
+                    // 开始渐隐动画
+                    hidePlaybackTouchIndicator()
                     
                     // 延迟执行下一个操作
                     playbackHandler?.postDelayed({
@@ -781,12 +1008,18 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
                     300L
                 }
                 
+                // 显示滑动开始位置的触摸指示器
+                showPlaybackTouchIndicator(x, y)
+                
                 TouchAccessibilityService.performSwipe(x, y, endX, endY, swipeDuration) { success ->
                     if (success) {
                         android.util.Log.d("FloatingWindow", "滑动成功")
                     } else {
                         android.util.Log.w("FloatingWindow", "滑动失败")
                     }
+                    
+                    // 开始渐隐动画
+                    hidePlaybackTouchIndicator()
                     
                     // 跳过 swipe_move 和 swipe_end，直接执行下一个非滑动操作
                     var skipToIndex = endIndex + 1
@@ -831,6 +1064,9 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
         playbackHandler?.removeCallbacksAndMessages(null)
         playbackHandler = null
         currentPlaybackIndex = 0
+        
+        // 隐藏回放视觉效果 overlay
+        hidePlaybackOverlay()
         
         sendEvent("onPlaybackStopped", null)
     }

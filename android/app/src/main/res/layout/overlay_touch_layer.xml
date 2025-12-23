@@ -5,13 +5,34 @@
     android:layout_height="match_parent"
     android:background="#80000000">
 
-    <!-- 触摸反馈圆点 -->
-    <View
+    <!-- 触摸反馈指示器（带点击次数） -->
+    <FrameLayout
         android:id="@+id/touchIndicator"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:background="@drawable/touch_indicator"
-        android:visibility="gone" />
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone">
+        
+        <!-- 背景圆点 -->
+        <View
+            android:id="@+id/touchCircle"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@drawable/touch_indicator_with_count"
+            android:layout_gravity="center" />
+        
+        <!-- 点击次数文字 -->
+        <TextView
+            android:id="@+id/touchCountLabel"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:gravity="center"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_gravity="center"
+            android:text="1" />
+            
+    </FrameLayout>
 
 </FrameLayout>
 
