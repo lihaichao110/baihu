@@ -15,19 +15,19 @@
         <!-- 背景圆点 -->
         <View
             android:id="@+id/touchCircle"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
             android:background="@drawable/touch_indicator_with_count"
             android:layout_gravity="center" />
         
         <!-- 点击次数文字 -->
         <TextView
             android:id="@+id/touchCountLabel"
-            android:layout_width="56dp"
-            android:layout_height="56dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
             android:gravity="center"
-            android:textColor="#FFFFFF"
-            android:textSize="16sp"
+            android:textColor="#00A5C4"
+            android:textSize="14sp"
             android:textStyle="bold"
             android:layout_gravity="center"
             android:text="1" />

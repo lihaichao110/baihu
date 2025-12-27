@@ -93,12 +93,7 @@ android {
         versionName "1.0"
     }
     signingConfigs {
-        debug {
-            storeFile file('debug.keystore')
-            storePassword 'android'
-            keyAlias 'androiddebugkey'
-            keyPassword 'android'
-        }
+        // 统一使用 release 签名，避免 debug 和 release 签名不同导致的安装冲突
         release {
             if (keystorePropertiesFile.exists()) {
                 storeFile file(keystoreProperties['storeFile'])
@@ -110,7 +105,8 @@ android {
     }
     buildTypes {
         debug {
-            signingConfig signingConfigs.debug
+            // debug 和 release 使用相同签名，这样切换构建类型时不会报签名冲突错误
+            signingConfig signingConfigs.release
         }
         release {
             signingConfig signingConfigs.release

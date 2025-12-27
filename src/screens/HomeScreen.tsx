@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ScrollView,
   View,
@@ -13,6 +13,9 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRoute, useNavigation } from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Header } from '../components/Header';
 import { Banner } from '../components/Banner';
 import { FeatureCard } from '../components/FeatureCard';
@@ -31,11 +34,22 @@ import TouchRecorder, {
   TouchRecord,
   RecordingSession,
 } from '../utils/TouchRecorder';
+import { generateDefaultScriptName } from '../utils/helpers';
+import type { RootStackParamList } from '../../App';
+
+type HomeScreenRouteProp = RouteProp<RootStackParamList, 'Home'>;
+type HomeScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  'Home'
+>;
 
 // 导入自定义的悬浮窗权限模块
 const { OverlayPermissionModule } = NativeModules;
 
 export const HomeScreen = () => {
+  const route = useRoute<HomeScreenRouteProp>();
+  const navigation = useNavigation<HomeScreenNavigationProp>();
+
   const [isTaskRunning, setIsTaskRunning] = useState(false);
   const [isFloatingWindowVisible, setIsFloatingWindowVisible] = useState(false);
   const [isAccessibilityEnabled, setIsAccessibilityEnabled] = useState(false);
@@ -49,6 +63,69 @@ export const HomeScreen = () => {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [scriptName, setScriptName] = useState('');
 
+  // 使用 ref 来追踪最新的 session 和播放状态，避免闭包陷阱
+  const lastSessionRef = useRef<RecordingSession | null>(null);
+  const isPlayingRef = useRef(false);
+
+  // 同步更新 ref
+  useEffect(() => {
+    lastSessionRef.current = lastSession;
+  }, [lastSession]);
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
+  // 处理从脚本列表页面传来的待执行脚本
+  useEffect(() => {
+    const sessionToExecute = route.params?.sessionToExecute;
+    if (sessionToExecute) {
+      console.log(
+        '从脚本列表加载待执行脚本:',
+        sessionToExecute.name || sessionToExecute.id,
+        '操作数:',
+        sessionToExecute.actions?.length || 0,
+      );
+
+      // 重要：无论当前状态如何，都先停止可能正在进行的回放
+      // 确保同一时间只有一个脚本在执行/待执行
+      FloatingWindowModule.stopPlayback();
+      setIsPlaying(false);
+      isPlayingRef.current = false;
+
+      // 如果正在录制，先停止录制
+      if (isTaskRunning) {
+        FloatingWindowModule.hideOverlay();
+        TouchRecorder.stopRecording(); // 丢弃当前录制
+        setIsTaskRunning(false);
+      }
+
+      // 关键：清除之前的录制数据（pendingSession），确保新脚本完全替代旧脚本
+      setPendingSession(null);
+
+      // 关键：先更新 ref（同步），再更新 state（异步）
+      // 这样确保 handleStartPlayback 立即能获取到最新的 session
+      lastSessionRef.current = sessionToExecute;
+      setLastSession(sessionToExecute);
+
+      console.log(
+        '脚本数据已更新，准备执行:',
+        sessionToExecute.name || sessionToExecute.id,
+      );
+
+      // 显示悬浮窗
+      setIsFloatingWindowVisible(true);
+      FloatingWindowModule.showFloatingWindow();
+
+      // 显示执行按钮，隐藏保存按钮（因为脚本已保存）
+      FloatingWindowModule.setPlayButtonVisible(true);
+      FloatingWindowModule.setSaveButtonVisible(false);
+
+      // 清除路由参数，避免重复触发
+      navigation.setParams({ sessionToExecute: undefined });
+    }
+  }, [route.params?.sessionToExecute, navigation, isTaskRunning]);
+
   const handleAutoTaskPress = async () => {
     // 如果悬浮窗已经显示，不重复执行
     if (isFloatingWindowVisible) {
@@ -56,29 +133,25 @@ export const HomeScreen = () => {
     }
 
     try {
-      // 1. 首先检查无障碍服务
+      // 只需要检查无障碍服务（不再需要悬浮窗权限！）
+      // 因为我们使用 TYPE_ACCESSIBILITY_OVERLAY，这是无障碍服务的特权
       if (Platform.OS === 'android') {
+        // 重要：使用 FloatingWindowModule.isAccessibilityServiceEnabled() 检查
+        // 因为它检查的是我们应用的 TouchAccessibilityService 是否启用
+        // 而 AccessibilityServiceModule.checkAccessibilityService() 检查的是设备上任意无障碍服务是否启用
         const accessibilityEnabled =
-          await AccessibilityServiceModule.checkAccessibilityService();
+          await FloatingWindowModule.isAccessibilityServiceEnabled();
 
         if (!accessibilityEnabled) {
           Alert.alert(
             '需要开启无障碍服务',
-            '自动任务需要无障碍服务权限才能正常工作。请在设置中为本应用开启无障碍服务。',
+            '自动任务需要无障碍服务权限才能正常工作。\n\n请在设置中为本应用开启无障碍服务。',
             [
               { text: '取消', style: 'cancel' },
               {
                 text: '去设置',
-                onPress: async () => {
-                  await AccessibilityServiceModule.openAccessibilitySettings();
-                  // 给用户提示如何操作
-                  setTimeout(() => {
-                    Alert.alert(
-                      '操作提示',
-                      '请在无障碍设置中找到"白虎"应用，并开启服务开关',
-                      [{ text: '知道了' }],
-                    );
-                  }, 1000);
+                onPress: () => {
+                  FloatingWindowModule.openAccessibilitySettings();
                 },
               },
             ],
@@ -86,32 +159,11 @@ export const HomeScreen = () => {
           return;
         }
 
-        // 无障碍服务已开启，继续检查悬浮窗权限
+        // 无障碍服务已开启
         setIsAccessibilityEnabled(true);
       }
 
-      // 2. 检查悬浮窗权限（使用自定义模块）
-      if (Platform.OS === 'android') {
-        const hasPermission = await OverlayPermissionModule.checkPermission();
-        if (!hasPermission) {
-          Alert.alert(
-            '需要悬浮窗权限',
-            '需要悬浮窗权限才能显示控制面板，请在设置中开启',
-            [
-              { text: '取消', style: 'cancel' },
-              {
-                text: '去设置',
-                onPress: async () => {
-                  await OverlayPermissionModule.requestPermission();
-                },
-              },
-            ],
-          );
-          return;
-        }
-      }
-
-      // 3. 所有权限都已具备，显示原生悬浮窗
+      // 无障碍服务已具备，显示悬浮窗（使用 TYPE_ACCESSIBILITY_OVERLAY，不需要悬浮窗权限）
       setIsTaskRunning(false);
       setIsFloatingWindowVisible(true);
 
@@ -185,6 +237,8 @@ export const HomeScreen = () => {
     if (session && session.actions.length > 0) {
       // 保存待处理会话用于回放和保存
       setPendingSession(session);
+      // 同时更新 ref 和 state，确保后续回放使用最新的 session
+      lastSessionRef.current = session;
       setLastSession(session);
       // 显示执行按钮和保存按钮
       FloatingWindowModule.setPlayButtonVisible(true);
@@ -196,6 +250,7 @@ export const HomeScreen = () => {
       FloatingWindowModule.setPlayButtonVisible(false);
       FloatingWindowModule.setSaveButtonVisible(false);
       setPendingSession(null);
+      lastSessionRef.current = null;
       // 当 session 为 null 或没有操作时显示提示
       Alert.alert(
         '录制结束',
@@ -210,10 +265,11 @@ export const HomeScreen = () => {
   }, []);
 
   const handleCloseFloatingWindow = useCallback(() => {
-    // 如果正在执行，先停止
-    if (isPlaying) {
+    // 如果正在执行，先停止（使用 ref 获取最新状态）
+    if (isPlayingRef.current) {
       FloatingWindowModule.stopPlayback();
       setIsPlaying(false);
+      isPlayingRef.current = false;
     }
 
     // 重置状态
@@ -223,19 +279,34 @@ export const HomeScreen = () => {
     FloatingWindowModule.hideOverlay();
     FloatingWindowModule.hideFloatingWindow();
     setIsFloatingWindowVisible(false);
-  }, [isPlaying]);
+  }, []);
 
   // 开始执行回放
   const handleStartPlayback = useCallback(() => {
-    if (!lastSession || lastSession.actions.length === 0) {
+    // 使用 ref 获取最新值，避免闭包陷阱
+    const currentSession = lastSessionRef.current;
+    const currentlyPlaying = isPlayingRef.current;
+
+    // 如果正在执行，不重复执行
+    if (currentlyPlaying) {
+      console.log('已经在执行中，忽略重复调用');
+      return;
+    }
+
+    if (!currentSession || currentSession.actions.length === 0) {
       Alert.alert('提示', '没有可执行的操作记录');
       return;
     }
 
-    console.log('开始执行回放，操作数:', lastSession.actions.length);
+    console.log(
+      '开始执行回放，脚本:',
+      currentSession.name || currentSession.id,
+      '操作数:',
+      currentSession.actions.length,
+    );
 
     // 将操作转换为回放格式
-    const playbackActions: PlaybackAction[] = lastSession.actions.map(
+    const playbackActions: PlaybackAction[] = currentSession.actions.map(
       action => ({
         type: action.type,
         normalizedX: action.coordinates.normalizedX,
@@ -245,20 +316,22 @@ export const HomeScreen = () => {
     );
 
     setIsPlaying(true);
+    isPlayingRef.current = true;
     FloatingWindowModule.updatePlayingState(true);
 
     // 执行操作
     FloatingWindowModule.executeActions(
       playbackActions,
-      lastSession.deviceInfo.width,
-      lastSession.deviceInfo.height,
+      currentSession.deviceInfo.width,
+      currentSession.deviceInfo.height,
     );
-  }, [lastSession]);
+  }, []); // 移除依赖，使用 ref 确保获取最新值
 
   // 停止执行回放
   const handleStopPlayback = useCallback(() => {
     console.log('停止回放');
     setIsPlaying(false);
+    isPlayingRef.current = false;
     FloatingWindowModule.stopPlayback();
     FloatingWindowModule.updatePlayingState(false);
   }, []);
@@ -308,8 +381,9 @@ export const HomeScreen = () => {
   // 处理自动连点器点击
   const handleAutoClickerPress = async () => {
     if (Platform.OS === 'android') {
+      // 使用 FloatingWindowModule 检查我们应用的无障碍服务是否启用
       const accessibilityEnabled =
-        await AccessibilityServiceModule.checkAccessibilityService();
+        await FloatingWindowModule.isAccessibilityServiceEnabled();
 
       if (!accessibilityEnabled) {
         Alert.alert(
@@ -319,8 +393,7 @@ export const HomeScreen = () => {
             { text: '取消', style: 'cancel' },
             {
               text: '去设置',
-              onPress: () =>
-                AccessibilityServiceModule.openAccessibilitySettings(),
+              onPress: () => FloatingWindowModule.openAccessibilitySettings(),
             },
           ],
         );
@@ -334,8 +407,9 @@ export const HomeScreen = () => {
   // 处理自动滚动点击
   const handleAutoScrollPress = async () => {
     if (Platform.OS === 'android') {
+      // 使用 FloatingWindowModule 检查我们应用的无障碍服务是否启用
       const accessibilityEnabled =
-        await AccessibilityServiceModule.checkAccessibilityService();
+        await FloatingWindowModule.isAccessibilityServiceEnabled();
 
       if (!accessibilityEnabled) {
         Alert.alert(
@@ -345,8 +419,7 @@ export const HomeScreen = () => {
             { text: '取消', style: 'cancel' },
             {
               text: '去设置',
-              onPress: () =>
-                AccessibilityServiceModule.openAccessibilitySettings(),
+              onPress: () => FloatingWindowModule.openAccessibilitySettings(),
             },
           ],
         );
@@ -360,8 +433,9 @@ export const HomeScreen = () => {
   // 处理自动刷新点击
   const handleAutoRefreshPress = async () => {
     if (Platform.OS === 'android') {
+      // 使用 FloatingWindowModule 检查我们应用的无障碍服务是否启用
       const accessibilityEnabled =
-        await AccessibilityServiceModule.checkAccessibilityService();
+        await FloatingWindowModule.isAccessibilityServiceEnabled();
 
       if (!accessibilityEnabled) {
         Alert.alert(
@@ -371,8 +445,7 @@ export const HomeScreen = () => {
             { text: '取消', style: 'cancel' },
             {
               text: '去设置',
-              onPress: () =>
-                AccessibilityServiceModule.openAccessibilitySettings(),
+              onPress: () => FloatingWindowModule.openAccessibilitySettings(),
             },
           ],
         );
@@ -481,8 +554,8 @@ export const HomeScreen = () => {
       (data: PlaybackCompleteData) => {
         console.log(`执行完成，共执行 ${data.executedCount} 个操作`);
         setIsPlaying(false);
+        isPlayingRef.current = false;
         FloatingWindowModule.updatePlayingState(false);
-        Alert.alert('执行完成', `成功执行了 ${data.executedCount} 个操作`);
       },
     );
 
@@ -492,6 +565,7 @@ export const HomeScreen = () => {
       () => {
         console.log('执行已停止');
         setIsPlaying(false);
+        isPlayingRef.current = false;
         FloatingWindowModule.updatePlayingState(false);
       },
     );
@@ -502,6 +576,7 @@ export const HomeScreen = () => {
       (data: PlaybackErrorData) => {
         console.error('执行错误:', data.error);
         setIsPlaying(false);
+        isPlayingRef.current = false;
         FloatingWindowModule.updatePlayingState(false);
         Alert.alert('执行错误', data.error);
       },
@@ -512,15 +587,8 @@ export const HomeScreen = () => {
       'onSaveRecording',
       () => {
         console.log('保存按钮被点击');
-        // 生成默认脚本名称
-        const now = new Date();
-        const defaultName = `脚本_${now.getFullYear()}${(now.getMonth() + 1)
-          .toString()
-          .padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now
-          .getHours()
-          .toString()
-          .padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
-        setScriptName(defaultName);
+        // 使用公共函数生成默认脚本名称
+        setScriptName(generateDefaultScriptName());
         setShowSaveModal(true);
       },
     );
@@ -552,24 +620,27 @@ export const HomeScreen = () => {
   useEffect(() => {
     let removeListener: (() => void) | null = null;
 
-    // 初始检查无障碍服务状态
+    // 初始检查无障碍服务状态（使用 FloatingWindowModule 检查我们应用的服务）
     const checkInitialStatus = async () => {
       if (Platform.OS === 'android') {
         const enabled =
-          await AccessibilityServiceModule.checkAccessibilityService();
+          await FloatingWindowModule.isAccessibilityServiceEnabled();
         setIsAccessibilityEnabled(enabled);
       }
     };
     checkInitialStatus();
 
-    // 添加状态变化监听
+    // 添加状态变化监听（当任意无障碍服务变化时会触发）
     const setupListener = async () => {
       removeListener =
         await AccessibilityServiceModule.addAccessibilityServiceListener(
-          isEnabled => {
-            setIsAccessibilityEnabled(isEnabled);
+          async () => {
+            // 重新检查我们应用的无障碍服务是否启用
+            const ourServiceEnabled =
+              await FloatingWindowModule.isAccessibilityServiceEnabled();
+            setIsAccessibilityEnabled(ourServiceEnabled);
 
-            if (isEnabled) {
+            if (ourServiceEnabled) {
               // 无障碍服务被启用
               Alert.alert('无障碍服务已启用', '现在可以使用自动任务功能了！', [
                 { text: '知道了' },
@@ -584,7 +655,7 @@ export const HomeScreen = () => {
                   {
                     text: '去设置',
                     onPress: () =>
-                      AccessibilityServiceModule.openAccessibilitySettings(),
+                      FloatingWindowModule.openAccessibilitySettings(),
                   },
                 ],
               );

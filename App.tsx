@@ -12,10 +12,11 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { SessionListScreen } from './src/screens/SessionListScreen';
+import type { RecordingSession } from './src/utils/TouchRecorder';
 
 // 定义导航参数类型
 export type RootStackParamList = {
-  Home: undefined;
+  Home: { sessionToExecute?: RecordingSession } | undefined;
   SessionList: undefined;
 };
 

@@ -8,28 +8,24 @@ import {
   TouchableOpacity,
   Alert,
   StatusBar,
+  Platform,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import TouchRecorder, { RecordingSession } from '../utils/TouchRecorder';
+import { formatDateTime, formatDuration } from '../utils/helpers';
+import FloatingWindowModule from '../modules/FloatingWindowModule';
 import colors from '../theme/colors';
+import type { RootStackParamList } from '../../App';
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 interface SessionItemProps {
   session: RecordingSession;
   onPress: () => void;
   onDelete: () => void;
 }
-
-// 格式化时间为 YYYY-MM-DD HH:mm:ss
-const formatDateTime = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const mins = String(date.getMinutes()).padStart(2, '0');
-  const secs = String(date.getSeconds()).padStart(2, '0');
-  return `${year}-${month}-${day} ${hours}:${mins}:${secs}`;
-};
 
 const SessionItem: React.FC<SessionItemProps> = ({
   session,
@@ -39,8 +35,7 @@ const SessionItem: React.FC<SessionItemProps> = ({
   const stats = TouchRecorder.getSessionStats(session);
   const startDate = new Date(session.startTime);
   const duration = Math.floor(stats.duration / 1000);
-  const minutes = Math.floor(duration / 60);
-  const seconds = duration % 60;
+  const durationStr = formatDuration(duration);
 
   // 显示脚本名称，如果没有则显示时间
   const displayName = session.name || formatDateTime(startDate);
@@ -81,9 +76,7 @@ const SessionItem: React.FC<SessionItemProps> = ({
 
       <View style={styles.statsContainer}>
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>
-            {minutes}:{seconds.toString().padStart(2, '0')}
-          </Text>
+          <Text style={styles.statValue}>{durationStr}</Text>
           <Text style={styles.statLabel}>时长</Text>
         </View>
         <View style={styles.statItem}>
@@ -107,6 +100,7 @@ export const SessionListScreen: React.FC = () => {
   const [sessions, setSessions] = useState<RecordingSession[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<NavigationProp>();
 
   const loadSessions = useCallback(async () => {
     setRefreshing(true);
@@ -124,31 +118,56 @@ export const SessionListScreen: React.FC = () => {
     }, [loadSessions]),
   );
 
+  // 执行脚本的处理函数
+  const executeScript = useCallback(
+    async (session: RecordingSession) => {
+      // 检查无障碍服务是否启用
+      if (Platform.OS === 'android') {
+        const accessibilityEnabled =
+          await FloatingWindowModule.isAccessibilityServiceEnabled();
+
+        if (!accessibilityEnabled) {
+          Alert.alert(
+            '需要开启无障碍服务',
+            '执行脚本需要无障碍服务权限才能正常工作。\n\n请在设置中为本应用开启无障碍服务。',
+            [
+              { text: '取消', style: 'cancel' },
+              {
+                text: '去设置',
+                onPress: () => {
+                  FloatingWindowModule.openAccessibilitySettings();
+                },
+              },
+            ],
+          );
+          return;
+        }
+      }
+
+      // 跳转到首页并传递待执行的脚本
+      navigation.navigate('Home', { sessionToExecute: session });
+    },
+    [navigation],
+  );
+
+  // 点击脚本项 - 显示确认执行弹窗
   const handleSessionPress = (session: RecordingSession) => {
+    const displayName =
+      session.name || formatDateTime(new Date(session.startTime));
     const stats = TouchRecorder.getSessionStats(session);
-    const startDate = new Date(session.startTime);
     const duration = Math.floor(stats.duration / 1000);
-    const minutes = Math.floor(duration / 60);
-    const seconds = duration % 60;
 
     Alert.alert(
-      '会话详情',
-      `开始时间: ${startDate.toLocaleString()}\n` +
-        `时长: ${minutes}:${seconds.toString().padStart(2, '0')}\n` +
-        `总触摸事件: ${stats.totalTouches}\n` +
-        `点击次数: ${stats.taps}\n` +
-        `滑动次数: ${stats.swipes}\n` +
-        `设备分辨率: ${session.deviceInfo.width}x${session.deviceInfo.height}`,
+      '确认执行',
+      `是否确认执行【${displayName}】脚本？\n\n` +
+        `该脚本包含 ${stats.totalTouches} 个操作\n` +
+        `时长: ${formatDuration(duration)}`,
       [
+        { text: '取消', style: 'cancel' },
         {
-          text: '导出JSON',
-          onPress: () => {
-            const json = TouchRecorder.exportSessionToJSON(session);
-            console.log('导出的会话数据:', json);
-            Alert.alert('导出成功', '会话数据已输出到控制台');
-          },
+          text: '确认执行',
+          onPress: () => executeScript(session),
         },
-        { text: '关闭' },
       ],
     );
   };
