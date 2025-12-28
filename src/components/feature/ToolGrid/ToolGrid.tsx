@@ -1,23 +1,19 @@
+/**
+ * 工具网格组件
+ * @description 展示常用工具的网格布局
+ */
+
 import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../../App';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const GAP = 15;
-const OUTER_MARGIN = 20;
-const INNER_PADDING = 15;
-// Calculate item width based on available space inside the card
-// Screen Width - Outer Margins (20*2) - Inner Padding (15*2) - Gap (15)
-const ITEM_WIDTH =
-  (SCREEN_WIDTH - OUTER_MARGIN * 2 - INNER_PADDING * 2 - GAP) / 2;
+import type { RootStackParamList } from '../../../types';
+import { DIMENSIONS } from '../../../constants';
 
 interface ToolItemProps {
   title: string;
@@ -29,7 +25,7 @@ interface ToolItemProps {
   onPress?: () => void;
 }
 
-const ToolItem = ({
+const ToolItem: React.FC<ToolItemProps> = ({
   title,
   icon,
   color,
@@ -37,7 +33,7 @@ const ToolItem = ({
   isBarcode,
   cardBackground,
   onPress,
-}: ToolItemProps) => {
+}) => {
   return (
     <TouchableOpacity
       activeOpacity={0.9}
@@ -73,7 +69,7 @@ const ToolItem = ({
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-export const ToolGrid = () => {
+export const ToolGrid: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
 
   const handleScriptCollectionPress = () => {
@@ -121,12 +117,12 @@ export const ToolGrid = () => {
 
 const styles = StyleSheet.create({
   container: {
-    marginHorizontal: OUTER_MARGIN,
+    marginHorizontal: DIMENSIONS.OUTER_MARGIN,
     marginTop: 20,
     marginBottom: 40,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)', // Slight transparency for glass feel
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderRadius: 24,
-    padding: INNER_PADDING,
+    padding: DIMENSIONS.INNER_PADDING,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -148,12 +144,12 @@ const styles = StyleSheet.create({
     gap: 15,
   },
   card: {
-    width: ITEM_WIDTH,
+    width: DIMENSIONS.TOOL_ITEM_WIDTH,
     height: 100,
     borderRadius: 16,
     padding: 15,
     justifyContent: 'center',
-    backgroundColor: '#fff', // Default white
+    backgroundColor: '#fff',
   },
   cardContent: {
     flex: 1,
@@ -186,3 +182,4 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
 });
+

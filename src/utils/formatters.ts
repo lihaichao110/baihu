@@ -1,5 +1,5 @@
 /**
- * 公共工具函数
+ * 格式化工具函数
  */
 
 /**
@@ -26,9 +26,9 @@ export const generateDefaultScriptName = (): string => {
   return `脚本_${now.getFullYear()}${(now.getMonth() + 1)
     .toString()
     .padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now
-      .getHours()
-      .toString()
-      .padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
+    .getHours()
+    .toString()
+    .padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
 };
 
 /**
@@ -40,5 +40,18 @@ export const formatDuration = (seconds: number): string => {
   const minutes = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${minutes}:${secs.toString().padStart(2, '0')}`;
+};
+
+/**
+ * 格式化毫秒时间为 mm:ss.ms 格式
+ * @param milliseconds 毫秒数
+ * @returns 格式化后的时间字符串
+ */
+export const formatMilliseconds = (milliseconds: number): string => {
+  const totalSeconds = Math.floor(milliseconds / 1000);
+  const ms = milliseconds % 1000;
+  const minutes = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
 };
 

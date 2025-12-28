@@ -1,8 +1,12 @@
+/**
+ * 顶部标题栏组件
+ */
+
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import colors from '../theme/colors';
+import { colors } from '../../../theme';
 
-export const Header = () => {
+export const Header: React.FC = () => {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>自动连点器</Text>
@@ -22,3 +26,4 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
 });
+

@@ -1,3 +1,8 @@
+/**
+ * 无障碍服务管理模块
+ * @description 封装 Android 无障碍服务相关功能
+ */
+
 import { Platform } from 'react-native';
 import AccessibilityServicesDetector from 'react-native-accessibility-services-detector';
 import type { EmitterSubscription } from 'react-native';

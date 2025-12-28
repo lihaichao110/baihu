@@ -1,62 +1,19 @@
+/**
+ * 触摸录制服务
+ * @description 管理触摸录制、存储和回放
+ */
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type {
+  ActionType,
+  ActionRecord,
+  RecordingSession,
+  SessionStats,
+  TouchRecord,
+  Orientation,
+} from '../../types';
 
-// 操作类型
-export type ActionType = 'tap' | 'swipe_start' | 'swipe_move' | 'swipe_end';
-
-// 坐标信息（包含原始坐标和归一化坐标）
-export interface Coordinates {
-  x: number;           // 原始 X 坐标（像素）
-  y: number;           // 原始 Y 坐标（像素）
-  normalizedX: number; // 归一化 X 坐标（0-1）
-  normalizedY: number; // 归一化 Y 坐标（0-1）
-}
-
-// 触摸元数据
-export interface TouchMeta {
-  pointerType: 'touch' | 'stylus' | 'mouse'; // 指针类型
-  pressure: number;    // 压力值（0-1）
-  velocityX: number;   // X 方向速度（像素/秒）
-  velocityY: number;   // Y 方向速度（像素/秒）
-}
-
-// 单个动作记录
-export interface ActionRecord {
-  type: ActionType;
-  timestamp: number;   // 毫秒时间戳
-  coordinates: Coordinates;
-  meta: TouchMeta;
-}
-
-// 设备信息（支持横屏）
-export interface DeviceInfo {
-  width: number;       // 屏幕宽度（像素）
-  height: number;      // 屏幕高度（像素）
-  orientation: 'portrait' | 'landscape'; // 屏幕方向
-}
-
-// 录制会话
-export interface RecordingSession {
-  id: string;
-  name?: string;          // 脚本名称（用户自定义）
-  startTime: number;
-  endTime?: number;
-  actions: ActionRecord[];
-  deviceInfo: DeviceInfo;
-}
-
-// 兼容旧的 TouchRecord 接口（供外部调用时使用）
-export interface TouchRecord {
-  x: number;
-  y: number;
-  timestamp: number;
-  type: ActionType;
-  pressure?: number;
-  pointerType?: 'touch' | 'stylus' | 'mouse';
-  velocityX?: number;
-  velocityY?: number;
-}
-
-class TouchRecorder {
+class TouchRecorderService {
   private currentSession: RecordingSession | null = null;
   private isRecording: boolean = false;
   private lastTouchTime: number = 0;
@@ -72,7 +29,7 @@ class TouchRecorder {
   startRecording(
     deviceWidth: number,
     deviceHeight: number,
-    orientation?: 'portrait' | 'landscape',
+    orientation?: Orientation,
   ): void {
     const sessionId = `session_${Date.now()}`;
     // 自动判断屏幕方向
@@ -319,13 +276,7 @@ class TouchRecorder {
   /**
    * 获取会话统计信息
    */
-  getSessionStats(session: RecordingSession): {
-    totalTouches: number;
-    taps: number;
-    swipes: number;
-    duration: number;
-    orientation: 'portrait' | 'landscape';
-  } {
+  getSessionStats(session: RecordingSession): SessionStats {
     // 确保 actions 存在且为数组
     const actions = session.actions || [];
     const taps = actions.filter(a => a.type === 'tap').length;
@@ -358,5 +309,5 @@ class TouchRecorder {
   }
 }
 
-export default new TouchRecorder();
+export default new TouchRecorderService();
 

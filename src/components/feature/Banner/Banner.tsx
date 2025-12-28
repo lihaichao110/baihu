@@ -1,12 +1,17 @@
+/**
+ * Banner 横幅组件
+ * @description 首页顶部的自动任务入口横幅
+ */
+
 import React from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
-import colors from '../theme/colors';
+import { colors } from '../../../theme';
 
 interface BannerProps {
   onPress?: () => void;
 }
 
-export const Banner = ({ onPress }: BannerProps) => {
+export const Banner: React.FC<BannerProps> = ({ onPress }) => {
   return (
     <TouchableOpacity
       style={styles.container}
@@ -18,7 +23,6 @@ export const Banner = ({ onPress }: BannerProps) => {
         <Text style={styles.subtitle}>解放你的双手，你的手机管家</Text>
 
         <View style={styles.iconRow}>
-          {/* Placeholders for icons */}
           <View style={styles.iconPlaceholder}>
             <Text style={styles.iconText}>↕️</Text>
           </View>
@@ -45,7 +49,7 @@ export const Banner = ({ onPress }: BannerProps) => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#4facfe', // Fallback for gradient
+    backgroundColor: '#4facfe',
     margin: 20,
     borderRadius: 20,
     padding: 20,
@@ -96,3 +100,4 @@ const styles = StyleSheet.create({
     resizeMode: 'contain',
   },
 });
+

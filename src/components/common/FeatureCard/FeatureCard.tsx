@@ -1,3 +1,8 @@
+/**
+ * 功能卡片组件
+ * @description 用于展示功能入口的卡片组件
+ */
+
 import React from 'react';
 import {
   View,
@@ -6,27 +11,24 @@ import {
   TouchableOpacity,
   Image,
   Dimensions,
+  ViewStyle,
 } from 'react-native';
-import colors from '../theme/colors';
+import { colors } from '../../../theme';
+import { DIMENSIONS } from '../../../constants';
 
 interface FeatureCardProps {
   title: string;
   subtitle: string;
-  backgroundColor: string; // Simplification: pass main color
+  backgroundColor: string;
   width?: 'full' | 'half';
-  icon?: string; // URL or emoji
+  icon?: string;
   imageUri?: string;
-  style?: any;
-  onPress?: () => void; // 添加点击回调
-  disabled?: boolean; // 添加禁用状态
+  style?: ViewStyle;
+  onPress?: () => void;
+  disabled?: boolean;
 }
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const GAP = 15;
-const PADDING = 20;
-const HALF_WIDTH = (SCREEN_WIDTH - PADDING * 2 - GAP) / 2;
-
-export const FeatureCard = ({
+export const FeatureCard: React.FC<FeatureCardProps> = ({
   title,
   subtitle,
   backgroundColor,
@@ -35,12 +37,12 @@ export const FeatureCard = ({
   style,
   onPress,
   disabled = false,
-}: FeatureCardProps) => {
+}) => {
   const cardStyle = [
     styles.container,
     {
       backgroundColor,
-      width: width === 'full' ? '100%' : HALF_WIDTH,
+      width: width === 'full' ? '100%' : DIMENSIONS.HALF_CARD_WIDTH,
       opacity: disabled ? 0.6 : 1,
     },
     style,
@@ -48,7 +50,7 @@ export const FeatureCard = ({
 
   return (
     <TouchableOpacity
-      style={cardStyle}
+      style={cardStyle as ViewStyle[]}
       activeOpacity={0.9}
       onPress={onPress}
       disabled={disabled}
@@ -108,3 +110,4 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
 });
+

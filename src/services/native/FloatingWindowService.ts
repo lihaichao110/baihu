@@ -1,59 +1,14 @@
+/**
+ * 悬浮窗服务模块
+ * @description 封装原生悬浮窗相关功能
+ */
+
 import { NativeModules, NativeEventEmitter, Platform, EmitterSubscription } from 'react-native';
+import type { PlaybackAction } from '../../types';
 
 const { FloatingWindowModule } = NativeModules;
 
-// 触摸事件类型
-export type TouchEventType = 'tap' | 'swipe_start' | 'swipe_move' | 'swipe_end';
-
-// 指针类型
-export type PointerType = 'touch' | 'stylus' | 'mouse';
-
-// 从原生端接收的触摸事件数据
-export interface TouchEventData {
-  type: TouchEventType;
-  x: number;
-  y: number;
-  timestamp: number;
-  // 扩展字段
-  pressure?: number;       // 压力值（0-1）
-  pointerType?: PointerType; // 指针类型
-  velocityX?: number;      // X 方向速度（像素/秒）
-  velocityY?: number;      // Y 方向速度（像素/秒）
-}
-
-// 设备信息数据
-export interface DeviceInfoData {
-  width: number;
-  height: number;
-  orientation: 'portrait' | 'landscape'; // 屏幕方向
-}
-
-// 回放进度数据
-export interface PlaybackProgressData {
-  current: number;
-  total: number;
-  type: TouchEventType;
-}
-
-// 回放完成数据
-export interface PlaybackCompleteData {
-  executedCount: number;
-}
-
-// 回放错误数据
-export interface PlaybackErrorData {
-  error: string;
-}
-
-// 执行操作的数据格式
-export interface PlaybackAction {
-  type: TouchEventType;
-  normalizedX: number;
-  normalizedY: number;
-  timestamp: number;
-}
-
-export interface FloatingWindowModuleInterface {
+export interface FloatingWindowServiceInterface {
   showFloatingWindow(): void;
   hideFloatingWindow(): void;
   showOverlay(): void;
@@ -70,7 +25,7 @@ export interface FloatingWindowModuleInterface {
   addEventListener(eventName: string, callback: (data?: any) => void): EmitterSubscription | { remove: () => void };
 }
 
-class FloatingWindowModuleWrapper implements FloatingWindowModuleInterface {
+class FloatingWindowServiceWrapper implements FloatingWindowServiceInterface {
   private eventEmitter: NativeEventEmitter | null = null;
 
   constructor() {
@@ -163,4 +118,5 @@ class FloatingWindowModuleWrapper implements FloatingWindowModuleInterface {
   }
 }
 
-export default new FloatingWindowModuleWrapper();
+export default new FloatingWindowServiceWrapper();
+

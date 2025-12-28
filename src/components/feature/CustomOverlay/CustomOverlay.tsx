@@ -1,3 +1,8 @@
+/**
+ * 自定义悬浮层组件
+ * @description 用于录制时的触摸悬浮层
+ */
+
 import React, { useState, useRef } from 'react';
 import {
   View,
@@ -10,13 +15,9 @@ import {
   Dimensions,
   Platform,
 } from 'react-native';
+import type { TouchRecord } from '../../../types';
 
-interface TouchRecord {
-  x: number;
-  y: number;
-  timestamp: number;
-  type: 'tap' | 'swipe_start' | 'swipe_move' | 'swipe_end';
-}
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface CustomOverlayProps {
   isRecording: boolean;
@@ -26,8 +27,6 @@ interface CustomOverlayProps {
   onClose: () => void;
   onTouchRecorded: (record: TouchRecord) => void;
 }
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export const CustomOverlay: React.FC<CustomOverlayProps> = ({
   isRecording,
@@ -47,11 +46,11 @@ export const CustomOverlay: React.FC<CustomOverlayProps> = ({
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
-      
+
       onPanResponderGrant: (evt: GestureResponderEvent) => {
         setIsDragging(true);
         dragStartTime.current = Date.now();
-        
+
         // 记录触摸开始位置
         if (isRecording) {
           const { pageX, pageY } = evt.nativeEvent;
@@ -64,7 +63,7 @@ export const CustomOverlay: React.FC<CustomOverlayProps> = ({
           onTouchRecorded(record);
         }
       },
-      
+
       onPanResponderMove: (
         evt: GestureResponderEvent,
         gestureState: PanResponderGestureState,
@@ -78,9 +77,9 @@ export const CustomOverlay: React.FC<CustomOverlayProps> = ({
           0,
           Math.min(SCREEN_HEIGHT - 120, position.y + gestureState.dy),
         );
-        
+
         setPosition({ x: newX, y: newY });
-        
+
         // 记录滑动轨迹
         if (isRecording) {
           const { pageX, pageY } = evt.nativeEvent;
@@ -93,11 +92,11 @@ export const CustomOverlay: React.FC<CustomOverlayProps> = ({
           onTouchRecorded(record);
         }
       },
-      
+
       onPanResponderRelease: (evt: GestureResponderEvent) => {
         setIsDragging(false);
         const dragDuration = Date.now() - dragStartTime.current;
-        
+
         // 记录触摸结束位置
         if (isRecording) {
           const { pageX, pageY } = evt.nativeEvent;
@@ -109,12 +108,12 @@ export const CustomOverlay: React.FC<CustomOverlayProps> = ({
           };
           onTouchRecorded(record);
         }
-        
+
         // 如果是快速点击（不是拖拽），则视为tap
         if (dragDuration < 200 && isRecording) {
           const { pageX, pageY } = evt.nativeEvent;
           const now = Date.now();
-          
+
           // 防止重复记录（双击保护）
           if (now - lastTapTime.current > 300) {
             const record: TouchRecord = {
@@ -194,9 +193,7 @@ export const CustomOverlay: React.FC<CustomOverlayProps> = ({
       {/* 提示文本 */}
       {isRecording && (
         <View style={styles.hintContainer}>
-          <Text style={styles.hintText}>
-            📍 正在记录触摸位置
-          </Text>
+          <Text style={styles.hintText}>📍 正在记录触摸位置</Text>
         </View>
       )}
     </View>
