@@ -4,12 +4,7 @@
  */
 
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../../types';
@@ -82,11 +77,12 @@ export const ToolGrid: React.FC = () => {
 
       <View style={styles.grid}>
         <ToolItem
-          title="条形码"
-          icon=""
+          title="匹配模版"
+          icon="📋"
           color="#667eea"
-          isBarcode={true}
+          iconBgColor="#c7d2fe"
           cardBackground="#E8EAF6"
+          onPress={() => navigation.navigate('TemplateList')}
         />
         <ToolItem
           title="脚本集合"
@@ -182,4 +178,3 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
 });
-

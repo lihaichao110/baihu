@@ -10,6 +10,7 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import androidx.annotation.RequiresApi
 
 /**
  * React Native 模块 - 悬浮窗控制
@@ -74,12 +75,12 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun hideOverlay() {
-        TouchAccessibilityService.hideOverlay()
+        TouchAccessibilityService.getInstance()?.hideOverlayInternal()
     }
 
     @ReactMethod
     fun updateRecordingState(isRecording: Boolean) {
-        TouchAccessibilityService.updateRecordingState(isRecording)
+        TouchAccessibilityService.getInstance()?.updateRecordingStateInternal(isRecording)
     }
     
     @ReactMethod
@@ -202,12 +203,15 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
         
         when (type) {
             "tap" -> {
-                TouchAccessibilityService.performTap(x, y) { success ->
-                    android.util.Log.d("FloatingWindowModule", "点击结果: $success")
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                    TouchAccessibilityService.getInstance()?.showPlaybackIndicator(x, y)
+                    TouchAccessibilityService.getInstance()?.dispatchTapGesture(x, y) { success ->
+                        android.util.Log.d("FloatingWindowModule", "点击结果: $success")
                     
-                    handler.postDelayed({
-                        executeNextAction(actions, index + 1, recordWidth, recordHeight, currentWidth, currentHeight, handler, executionId)
-                    }, nextDelay.coerceAtLeast(100))
+                        handler.postDelayed({
+                            executeNextAction(actions, index + 1, recordWidth, recordHeight, currentWidth, currentHeight, handler, executionId)
+                        }, nextDelay.coerceAtLeast(100))
+                    }
                 }
             }
             "swipe_start" -> {
@@ -310,16 +314,201 @@ class FloatingWindowModule(private val reactContext: ReactApplicationContext) :
         
         android.util.Log.d("FloatingWindowModule", "测试点击: ($centerX, $centerY)")
         
-        TouchAccessibilityService.performTap(centerX, centerY) { success ->
-            android.util.Log.d("FloatingWindowModule", "测试结果: $success")
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+            TouchAccessibilityService.getInstance()?.showPlaybackIndicator(centerX, centerY)
+            TouchAccessibilityService.getInstance()?.dispatchTapGesture(centerX, centerY) { success ->
+                android.util.Log.d("FloatingWindowModule", "测试结果: $success")
+                reactContext.currentActivity?.runOnUiThread {
+                    promise.resolve(Arguments.createMap().apply {
+                        putBoolean("success", success)
+                        if (!success) {
+                            putString("error", "手势执行失败")
+                        }
+                    })
+                }
+            }
+        } else {
             reactContext.currentActivity?.runOnUiThread {
                 promise.resolve(Arguments.createMap().apply {
-                    putBoolean("success", success)
-                    if (!success) {
-                        putString("error", "手势执行失败")
-                    }
+                    putBoolean("success", false)
+                    putString("error", "Android版本不支持")
                 })
             }
+        }
+    }
+    
+    // ==================== 屏幕文字匹配相关方法 ====================
+    
+    /**
+     * 获取屏幕所有文字元素
+     */
+    @ReactMethod
+    fun getScreenTexts(promise: Promise) {
+        if (!TouchAccessibilityService.isServiceEnabled()) {
+            promise.resolve(Arguments.createMap().apply {
+                putBoolean("success", false)
+                putString("error", "无障碍服务未启用")
+            })
+            return
+        }
+        
+        try {
+            val texts = TouchAccessibilityService.getScreenTexts()
+            val array = Arguments.createArray()
+            
+            for (text in texts) {
+                val map = Arguments.createMap()
+                map.putString("text", text.text)
+                map.putDouble("x", text.x.toDouble())
+                map.putDouble("y", text.y.toDouble())
+                map.putDouble("width", text.width.toDouble())
+                map.putDouble("height", text.height.toDouble())
+                array.pushMap(map)
+            }
+            
+            promise.resolve(Arguments.createMap().apply {
+                putBoolean("success", true)
+                putArray("texts", array)
+                putInt("count", texts.size)
+            })
+        } catch (e: Exception) {
+            android.util.Log.e("FloatingWindowModule", "获取屏幕文字失败: ${e.message}")
+            promise.resolve(Arguments.createMap().apply {
+                putBoolean("success", false)
+                putString("error", e.message)
+            })
+        }
+    }
+    
+    /**
+     * 查找屏幕上的文字
+     */
+    @ReactMethod
+    fun findTextOnScreen(targetText: String, matchMode: String, promise: Promise) {
+        if (!TouchAccessibilityService.isServiceEnabled()) {
+            promise.resolve(Arguments.createMap().apply {
+                putBoolean("success", false)
+                putString("error", "无障碍服务未启用")
+            })
+            return
+        }
+        
+        try {
+            val matched = TouchAccessibilityService.findText(targetText, matchMode)
+            
+            if (matched != null) {
+                val centerX = matched.x + matched.width / 2
+                val centerY = matched.y + matched.height / 2
+                
+                promise.resolve(Arguments.createMap().apply {
+                    putBoolean("success", true)
+                    putString("text", matched.text)
+                    putDouble("x", matched.x.toDouble())
+                    putDouble("y", matched.y.toDouble())
+                    putDouble("width", matched.width.toDouble())
+                    putDouble("height", matched.height.toDouble())
+                    putDouble("centerX", centerX.toDouble())
+                    putDouble("centerY", centerY.toDouble())
+                })
+            } else {
+                promise.resolve(Arguments.createMap().apply {
+                    putBoolean("success", false)
+                    putString("error", "未找到目标文字")
+                })
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("FloatingWindowModule", "查找文字失败: ${e.message}")
+            promise.resolve(Arguments.createMap().apply {
+                putBoolean("success", false)
+                putString("error", e.message)
+            })
+        }
+    }
+    
+    /**
+     * 根据文字自动点击
+     */
+    @ReactMethod
+    fun autoClickByText(targetText: String, matchMode: String, promise: Promise) {
+        if (!TouchAccessibilityService.isServiceEnabled()) {
+            promise.resolve(Arguments.createMap().apply {
+                putBoolean("success", false)
+                putString("error", "无障碍服务未启用")
+            })
+            return
+        }
+        
+        TouchAccessibilityService.autoClickByText(targetText, matchMode) { success, element ->
+            reactContext.currentActivity?.runOnUiThread {
+                if (success && element != null) {
+                    val centerX = element.x + element.width / 2
+                    val centerY = element.y + element.height / 2
+                    
+                    promise.resolve(Arguments.createMap().apply {
+                        putBoolean("success", true)
+                        putString("text", element.text)
+                        putDouble("centerX", centerX.toDouble())
+                        putDouble("centerY", centerY.toDouble())
+                    })
+                } else {
+                    promise.resolve(Arguments.createMap().apply {
+                        putBoolean("success", false)
+                        putString("error", "未找到目标文字或点击失败")
+                    })
+                }
+            }
+        }
+    }
+    
+    /**
+     * 批量查找文字
+     */
+    @ReactMethod
+    fun findMultipleTexts(targetTexts: ReadableArray, matchMode: String, promise: Promise) {
+        if (!TouchAccessibilityService.isServiceEnabled()) {
+            promise.resolve(Arguments.createMap().apply {
+                putBoolean("success", false)
+                putString("error", "无障碍服务未启用")
+            })
+            return
+        }
+        
+        try {
+            val textList = mutableListOf<String>()
+            for (i in 0 until targetTexts.size()) {
+                val text = targetTexts.getString(i)
+                if (text != null) {
+                    textList.add(text)
+                }
+            }
+            
+            val results = TouchAccessibilityService.findMultipleTexts(textList, matchMode)
+            val resultMap = Arguments.createMap()
+            
+            results.forEach { (key, value) ->
+                if (value != null) {
+                    val elementMap = Arguments.createMap()
+                    elementMap.putString("text", value.text)
+                    elementMap.putDouble("x", value.x.toDouble())
+                    elementMap.putDouble("y", value.y.toDouble())
+                    elementMap.putDouble("width", value.width.toDouble())
+                    elementMap.putDouble("height", value.height.toDouble())
+                    resultMap.putMap(key, elementMap)
+                } else {
+                    resultMap.putNull(key)
+                }
+            }
+            
+            promise.resolve(Arguments.createMap().apply {
+                putBoolean("success", true)
+                putMap("results", resultMap)
+            })
+        } catch (e: Exception) {
+            android.util.Log.e("FloatingWindowModule", "批量查找文字失败: ${e.message}")
+            promise.resolve(Arguments.createMap().apply {
+                putBoolean("success", false)
+                putString("error", e.message)
+            })
         }
     }
     

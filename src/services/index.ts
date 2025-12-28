@@ -6,6 +6,7 @@
 // 原生模块服务
 export { default as AccessibilityService } from './native/AccessibilityService';
 export { default as FloatingWindowService } from './native/FloatingWindowService';
+export { default as TextMatchingService } from './native/TextMatchingService';
 
 // 业务服务
 export { default as TouchRecorderService } from './storage/TouchRecorderService';

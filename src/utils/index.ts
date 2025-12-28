@@ -4,3 +4,7 @@
 
 export * from './formatters';
 
+// 导出 textMatchingUtils 模块
+import * as TextMatchingUtils from './textMatchingUtils';
+export { TextMatchingUtils };
+

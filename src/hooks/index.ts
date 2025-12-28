@@ -4,4 +4,6 @@
 
 export { useAccessibility } from './useAccessibility';
 export { useFloatingWindow } from './useFloatingWindow';
+export { default as useTextMatching } from './useTextMatching';
+export { useScriptExecution } from './useScriptExecutionWithText';
 

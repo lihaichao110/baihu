@@ -70,129 +70,9 @@ class TouchAccessibilityService : AccessibilityService() {
     private var playbackHideAnimator: android.animation.ValueAnimator? = null
     private var playbackIndicatorParams: WindowManager.LayoutParams? = null
 
-    companion object {
-        var instance: TouchAccessibilityService? = null
-            private set
-        
-        private var reactContext: ReactApplicationContext? = null
-        
-        fun setReactContext(context: ReactApplicationContext?) {
-            reactContext = context
-        }
-        
-        /**
-         * 检查服务是否可用
-         */
-        fun isServiceEnabled(): Boolean {
-            return instance != null
-        }
-        
-        /**
-         * 显示悬浮控制按钮
-         */
-        fun showFloatingWindow() {
-            instance?.showFloatingWindowInternal()
-        }
-        
-        /**
-         * 隐藏悬浮控制按钮
-         */
-        fun hideFloatingWindow() {
-            instance?.hideFloatingWindowInternal()
-        }
-        
-        /**
-         * 显示录制蒙层
-         */
-        fun showOverlay() {
-            instance?.showOverlayInternal()
-        }
-        
-        /**
-         * 隐藏录制蒙层
-         */
-        fun hideOverlay() {
-            instance?.hideOverlayInternal()
-        }
-        
-        /**
-         * 更新录制状态
-         */
-        fun updateRecordingState(isRecording: Boolean) {
-            instance?.updateRecordingStateInternal(isRecording)
-        }
-        
-        /**
-         * 设置执行按钮可见性
-         */
-        fun setPlayButtonVisible(visible: Boolean) {
-            instance?.setPlayButtonVisibleInternal(visible)
-        }
-        
-        /**
-         * 设置保存按钮可见性
-         */
-        fun setSaveButtonVisible(visible: Boolean) {
-            instance?.setSaveButtonVisibleInternal(visible)
-        }
-        
-        /**
-         * 更新执行状态
-         */
-        fun updatePlayingState(playing: Boolean) {
-            instance?.updatePlayingStateInternal(playing)
-        }
-        
-        /**
-         * 执行点击手势
-         */
-        fun performTap(x: Float, y: Float, callback: ((Boolean) -> Unit)? = null) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                instance?.showPlaybackIndicator(x, y)
-                instance?.dispatchTapGesture(x, y, callback) ?: callback?.invoke(false)
-            } else {
-                callback?.invoke(false)
-            }
-        }
-        
-        /**
-         * 执行滑动手势
-         */
-        fun performSwipe(
-            startX: Float, 
-            startY: Float, 
-            endX: Float, 
-            endY: Float, 
-            duration: Long = 300,
-            callback: ((Boolean) -> Unit)? = null
-        ) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                instance?.showPlaybackSwipeIndicator(startX, startY, endX, endY, duration)
-                instance?.dispatchSwipeGesture(startX, startY, endX, endY, duration, callback) ?: callback?.invoke(false)
-            } else {
-                callback?.invoke(false)
-            }
-        }
-        
-        /**
-         * 停止回放
-         */
-        fun stopPlayback() {
-            instance?.stopPlaybackInternal()
-        }
-        
-        /**
-         * 重置回放计数器（用于开始新的回放前）
-         * 不发送 onPlaybackStopped 事件，避免状态混乱
-         */
-        fun resetPlaybackState() {
-            instance?.resetPlaybackStateInternal()
-        }
-    }
-
     override fun onServiceConnected() {
         super.onServiceConnected()
-        instance = this
+        TouchAccessibilityService.instance = this
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         android.util.Log.d("TouchAccessibility", "✅ 服务已连接，可以使用 TYPE_ACCESSIBILITY_OVERLAY")
     }
@@ -219,7 +99,7 @@ class TouchAccessibilityService : AccessibilityService() {
         super.onDestroy()
         hideOverlayInternal()
         hideFloatingWindowInternal()
-        instance = null
+        TouchAccessibilityService.instance = null
         android.util.Log.d("TouchAccessibility", "服务已销毁")
     }
     
@@ -421,7 +301,7 @@ class TouchAccessibilityService : AccessibilityService() {
         }
     }
     
-    private fun hideOverlayInternal() {
+    fun hideOverlayInternal() {
         if (isOverlayShowing && overlayView != null) {
             Handler(Looper.getMainLooper()).post {
                 try {
@@ -611,7 +491,7 @@ class TouchAccessibilityService : AccessibilityService() {
     
     // ==================== UI 状态更新 ====================
     
-    private fun updateRecordingStateInternal(isRecording: Boolean) {
+    fun updateRecordingStateInternal(isRecording: Boolean) {
         Handler(Looper.getMainLooper()).post {
             floatingView?.let { view ->
                 val startButton = view.findViewById<android.widget.Button>(R.id.startButton)
@@ -768,39 +648,42 @@ class TouchAccessibilityService : AccessibilityService() {
                         it.scaleY = 1f
                     }
                 })
-                start()
             }
+            hideAnimator?.start()
         }
     }
     
     // ==================== 回放触摸指示器 ====================
     
-    private fun showPlaybackIndicator(x: Float, y: Float) {
+    fun showPlaybackIndicator(x: Float, y: Float) {
+        // 捕获对外部类的引用
+        val service = this
+        
         // 捕获当前的执行 ID
-        val executionId = currentPlaybackId
+        val executionId = service.currentPlaybackId
         
         Handler(Looper.getMainLooper()).post {
             // 检查执行 ID 是否仍然有效（可能已经被新的执行取代）
-            if (executionId != currentPlaybackId) {
-                android.util.Log.d("TouchAccessibility", "跳过旧的指示器任务，executionId=$executionId, current=$currentPlaybackId")
+            if (executionId != service.currentPlaybackId) {
+                android.util.Log.d("TouchAccessibility", "跳过旧的指示器任务，executionId=$executionId, current=${service.currentPlaybackId}")
                 return@post
             }
             
             try {
-                playbackTouchCount++
+                service.playbackTouchCount++
                 
                 // 移除之前的指示器
-                playbackHideAnimator?.cancel()
-                if (playbackOverlayView != null) {
+                service.playbackHideAnimator?.cancel()
+                if (service.playbackOverlayView != null) {
                     try {
-                        windowManager?.removeView(playbackOverlayView)
+                        service.windowManager?.removeView(service.playbackOverlayView)
                     } catch (e: Exception) {}
                 }
                 
                 // 创建新的指示器视图
-                playbackOverlayView = LayoutInflater.from(this).inflate(R.layout.overlay_touch_layer, null)
+                service.playbackOverlayView = LayoutInflater.from(service).inflate(R.layout.overlay_touch_layer, null)
                 
-                playbackIndicatorParams = WindowManager.LayoutParams(
+                service.playbackIndicatorParams = WindowManager.LayoutParams(
                     WindowManager.LayoutParams.MATCH_PARENT,
                     WindowManager.LayoutParams.MATCH_PARENT,
                     WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
@@ -811,21 +694,21 @@ class TouchAccessibilityService : AccessibilityService() {
                     PixelFormat.TRANSLUCENT
                 )
                 
-                playbackIndicatorParams?.apply {
+                service.playbackIndicatorParams?.apply {
                     gravity = Gravity.TOP or Gravity.START
                 }
                 
                 // 设置透明背景（回放时不需要遮罩）
-                playbackOverlayView?.findViewById<FrameLayout>(R.id.overlayTouchLayer)?.setBackgroundColor(Color.TRANSPARENT)
+                service.playbackOverlayView?.findViewById<FrameLayout>(R.id.overlayTouchLayer)?.setBackgroundColor(Color.TRANSPARENT)
                 
-                windowManager?.addView(playbackOverlayView, playbackIndicatorParams)
+                service.windowManager?.addView(service.playbackOverlayView, service.playbackIndicatorParams)
                 
                 // 显示指示器
-                val touchIndicator = playbackOverlayView?.findViewById<View>(R.id.touchIndicator)
+                val touchIndicator = service.playbackOverlayView?.findViewById<View>(R.id.touchIndicator)
                 val countLabel = touchIndicator?.findViewById<TextView>(R.id.touchCountLabel)
-                countLabel?.text = playbackTouchCount.toString()
+                countLabel?.text = service.playbackTouchCount.toString()
                 
-                val density = resources.displayMetrics.density
+                val density = service.resources.displayMetrics.density
                 touchIndicator?.visibility = View.VISIBLE
                 touchIndicator?.x = x - 20 * density
                 touchIndicator?.y = y - 20 * density
@@ -849,31 +732,34 @@ class TouchAccessibilityService : AccessibilityService() {
     }
     
     private fun showPlaybackSwipeIndicator(startX: Float, startY: Float, endX: Float, endY: Float, duration: Long) {
+        // 捕获对外部类的引用
+        val service = this
+        
         // 捕获当前的执行 ID
-        val executionId = currentPlaybackId
+        val executionId = service.currentPlaybackId
         
         Handler(Looper.getMainLooper()).post {
             // 检查执行 ID 是否仍然有效（可能已经被新的执行取代）
-            if (executionId != currentPlaybackId) {
-                android.util.Log.d("TouchAccessibility", "跳过旧的滑动指示器任务，executionId=$executionId, current=$currentPlaybackId")
+            if (executionId != service.currentPlaybackId) {
+                android.util.Log.d("TouchAccessibility", "跳过旧的滑动指示器任务，executionId=$executionId, current=${service.currentPlaybackId}")
                 return@post
             }
             
             try {
-                playbackTouchCount++
+                service.playbackTouchCount++
                 
                 // 移除之前的指示器
-                playbackHideAnimator?.cancel()
-                if (playbackOverlayView != null) {
+                service.playbackHideAnimator?.cancel()
+                if (service.playbackOverlayView != null) {
                     try {
-                        windowManager?.removeView(playbackOverlayView)
+                        service.windowManager?.removeView(service.playbackOverlayView)
                     } catch (e: Exception) {}
                 }
                 
                 // 创建新的指示器视图
-                playbackOverlayView = LayoutInflater.from(this).inflate(R.layout.overlay_touch_layer, null)
+                service.playbackOverlayView = LayoutInflater.from(service).inflate(R.layout.overlay_touch_layer, null)
                 
-                playbackIndicatorParams = WindowManager.LayoutParams(
+                service.playbackIndicatorParams = WindowManager.LayoutParams(
                     WindowManager.LayoutParams.MATCH_PARENT,
                     WindowManager.LayoutParams.MATCH_PARENT,
                     WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
@@ -884,21 +770,21 @@ class TouchAccessibilityService : AccessibilityService() {
                     PixelFormat.TRANSLUCENT
                 )
                 
-                playbackIndicatorParams?.apply {
+                service.playbackIndicatorParams?.apply {
                     gravity = Gravity.TOP or Gravity.START
                 }
                 
                 // 设置透明背景
-                playbackOverlayView?.findViewById<FrameLayout>(R.id.overlayTouchLayer)?.setBackgroundColor(Color.TRANSPARENT)
+                service.playbackOverlayView?.findViewById<FrameLayout>(R.id.overlayTouchLayer)?.setBackgroundColor(Color.TRANSPARENT)
                 
-                windowManager?.addView(playbackOverlayView, playbackIndicatorParams)
+                service.windowManager?.addView(service.playbackOverlayView, service.playbackIndicatorParams)
                 
                 // 显示起始位置指示器
-                val touchIndicator = playbackOverlayView?.findViewById<View>(R.id.touchIndicator)
+                val touchIndicator = service.playbackOverlayView?.findViewById<View>(R.id.touchIndicator)
                 val countLabel = touchIndicator?.findViewById<TextView>(R.id.touchCountLabel)
-                countLabel?.text = playbackTouchCount.toString()
+                countLabel?.text = service.playbackTouchCount.toString()
                 
-                val density = resources.displayMetrics.density
+                val density = service.resources.displayMetrics.density
                 touchIndicator?.visibility = View.VISIBLE
                 touchIndicator?.x = startX - 20 * density
                 touchIndicator?.y = startY - 20 * density
@@ -952,8 +838,8 @@ class TouchAccessibilityService : AccessibilityService() {
                         playbackHideAnimator = null
                     }
                 })
-                start()
             }
+            playbackHideAnimator?.start()
         }
     }
     
@@ -969,7 +855,7 @@ class TouchAccessibilityService : AccessibilityService() {
     // ==================== 手势执行 ====================
 
     @RequiresApi(Build.VERSION_CODES.N)
-    private fun dispatchTapGesture(x: Float, y: Float, callback: ((Boolean) -> Unit)?) {
+    fun dispatchTapGesture(x: Float, y: Float, callback: ((Boolean) -> Unit)?) {
         android.util.Log.d("TouchAccessibility", "dispatchTapGesture: ($x, $y)")
         
         val path = Path()
@@ -1116,6 +1002,301 @@ class TouchAccessibilityService : AccessibilityService() {
             }
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+    }
+    
+    // ==================== 屏幕文字匹配 ====================
+    
+    /**
+     * 屏幕文字元素数据类
+     */
+    data class TextElement(
+        val text: String,
+        val x: Float,
+        val y: Float,
+        val width: Float,
+        val height: Float
+    )
+    
+    /**
+     * 获取屏幕上所有文字元素
+     */
+    fun getAllTextElements(): List<TextElement> {
+        val result = mutableListOf<TextElement>()
+        val rootNode = rootInActiveWindow ?: return result
+        
+        // 递归遍历所有节点
+        fun traverseNode(node: android.view.accessibility.AccessibilityNodeInfo) {
+            val text = node.text?.toString() ?: node.contentDescription?.toString()
+            
+            if (!text.isNullOrEmpty()) {
+                val bounds = android.graphics.Rect()
+                node.getBoundsInScreen(bounds)
+                
+                result.add(TextElement(
+                    text = text,
+                    x = bounds.left.toFloat(),
+                    y = bounds.top.toFloat(),
+                    width = bounds.width().toFloat(),
+                    height = bounds.height().toFloat()
+                ))
+            }
+            
+            // 遍历子节点
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i)
+                if (child != null) {
+                    traverseNode(child)
+                }
+            }
+        }
+        
+        traverseNode(rootNode)
+        
+        android.util.Log.d("TouchAccessibility", "获取到 ${result.size} 个文字元素")
+        return result
+    }
+    
+    /**
+     * 查找屏幕上的目标文字
+     */
+    fun findTextOnScreen(targetText: String, matchMode: String = "contains"): TextElement? {
+        val allTexts = getAllTextElements()
+        
+        return allTexts.find { element ->
+            when (matchMode.lowercase()) {
+                "exact" -> element.text == targetText
+                "contains" -> element.text.contains(targetText, ignoreCase = true)
+                "starts_with" -> element.text.startsWith(targetText, ignoreCase = true)
+                "ends_with" -> element.text.endsWith(targetText, ignoreCase = true)
+                "regex" -> {
+                    try {
+                        Regex(targetText, RegexOption.IGNORE_CASE).containsMatchIn(element.text)
+                    } catch (e: Exception) {
+                        false
+                    }
+                }
+                else -> element.text.contains(targetText, ignoreCase = true)
+            }
+        }
+    }
+    
+    /**
+     * 发送屏幕文字元素到 React Native
+     */
+    fun sendScreenTexts() {
+        val texts = getAllTextElements()
+        val array = com.facebook.react.bridge.Arguments.createArray()
+        
+        for (text in texts) {
+            val map = com.facebook.react.bridge.Arguments.createMap()
+            map.putString("text", text.text)
+            map.putDouble("x", text.x.toDouble())
+            map.putDouble("y", text.y.toDouble())
+            map.putDouble("width", text.width.toDouble())
+            map.putDouble("height", text.height.toDouble())
+            array.pushMap(map)
+        }
+        
+        val params = com.facebook.react.bridge.Arguments.createMap()
+        params.putArray("texts", array)
+        sendEvent("onScreenTexts", params)
+    }
+    
+    companion object {
+        private var instance: TouchAccessibilityService? = null
+        
+        /**
+         * 设置服务实例
+         */
+        fun setInstance(service: TouchAccessibilityService?) {
+            instance = service
+        }
+        
+        /**
+         * 获取服务实例
+         */
+        fun getInstance(): TouchAccessibilityService? {
+            return instance
+        }
+        
+        /**
+         * 设置 React Context
+         */
+        private var reactContext: ReactApplicationContext? = null
+        
+        fun setReactContext(context: ReactApplicationContext?) {
+            reactContext = context
+        }
+        
+        /**
+         * 检查服务是否可用
+         */
+        fun isServiceEnabled(): Boolean {
+            return instance != null
+        }
+        
+        // ==================== 已有的方法 ====================
+        
+        fun showFloatingWindow() {
+            instance?.showFloatingWindowInternal()
+        }
+        
+        fun hideFloatingWindow() {
+            instance?.hideFloatingWindowInternal()
+        }
+        
+        fun showOverlay() {
+            instance?.showOverlayInternal()
+        }
+        
+        fun hideOverlay() {
+            instance?.hideOverlayInternal()
+        }
+        
+        fun updateRecordingState(isRecording: Boolean) {
+            instance?.updateRecordingStateInternal(isRecording)
+        }
+        
+        fun setPlayButtonVisible(visible: Boolean) {
+            instance?.setPlayButtonVisibleInternal(visible)
+        }
+        
+        fun setSaveButtonVisible(visible: Boolean) {
+            instance?.setSaveButtonVisibleInternal(visible)
+        }
+        
+        fun updatePlayingState(playing: Boolean) {
+            instance?.updatePlayingStateInternal(playing)
+        }
+        
+        fun performTap(x: Float, y: Float, callback: ((Boolean) -> Unit)? = null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                instance?.showPlaybackIndicator(x, y)
+                instance?.dispatchTapGesture(x, y, callback) ?: callback?.invoke(false)
+            } else {
+                callback?.invoke(false)
+            }
+        }
+        
+        fun performSwipe(
+            startX: Float, 
+            startY: Float, 
+            endX: Float, 
+            endY: Float, 
+            duration: Long = 300,
+            callback: ((Boolean) -> Unit)? = null
+        ) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                instance?.showPlaybackSwipeIndicator(startX, startY, endX, endY, duration)
+                instance?.dispatchSwipeGesture(startX, startY, endX, endY, duration, callback) ?: callback?.invoke(false)
+            } else {
+                callback?.invoke(false)
+            }
+        }
+        
+        fun stopPlayback() {
+            instance?.stopPlaybackInternal()
+        }
+        
+        fun resetPlaybackState() {
+            instance?.resetPlaybackStateInternal()
+        }
+        
+        // ==================== 新增的文字匹配方法 ====================
+        
+        /**
+         * 获取屏幕所有文字元素
+         */
+        fun getScreenTexts(): List<TextElement> {
+            return instance?.getAllTextElements() ?: emptyList()
+        }
+        
+        /**
+         * 查找文字
+         */
+        fun findText(targetText: String, matchMode: String = "contains"): TextElement? {
+            return instance?.findTextOnScreen(targetText, matchMode)
+        }
+        
+        /**
+         * 根据文字自动点击
+         */
+        fun autoClickByText(
+            targetText: String,
+            matchMode: String = "contains",
+            callback: ((Boolean, TextElement?) -> Unit)? = null
+        ) {
+            instance?.let { service ->
+                val matchedElement = service.findTextOnScreen(targetText, matchMode)
+                
+                if (matchedElement != null) {
+                    // 计算点击位置（元素中心）
+                    val centerX = matchedElement.x + matchedElement.width / 2
+                    val centerY = matchedElement.y + matchedElement.height / 2
+                    
+                    android.util.Log.d("TouchAccessibility", "找到文字: '${matchedElement.text}' 在 (${centerX}, ${centerY})")
+                    
+                    // 发送匹配成功事件
+                    val params = com.facebook.react.bridge.Arguments.createMap()
+                    params.putString("text", matchedElement.text)
+                    params.putDouble("x", centerX.toDouble())
+                    params.putDouble("y", centerY.toDouble())
+                    sendEventToJS("onTextMatched", params)
+                    
+                    // 执行点击
+                    service.dispatchTapGesture(centerX, centerY) { success ->
+                        callback?.invoke(success, matchedElement)
+                    }
+                } else {
+                    android.util.Log.w("TouchAccessibility", "未找到文字: '$targetText'")
+                    callback?.invoke(false, null)
+                }
+            } ?: callback?.invoke(false, null)
+        }
+        
+        /**
+         * 批量查找文字
+         */
+        fun findMultipleTexts(
+            targetTexts: List<String>,
+            matchMode: String = "contains"
+        ): Map<String, TextElement?> {
+            val result = mutableMapOf<String, TextElement?>()
+            val screenTexts = getScreenTexts()
+            
+            for (targetText in targetTexts) {
+                result[targetText] = screenTexts.find { element ->
+                    when (matchMode.lowercase()) {
+                        "exact" -> element.text == targetText
+                        "contains" -> element.text.contains(targetText, ignoreCase = true)
+                        "starts_with" -> element.text.startsWith(targetText, ignoreCase = true)
+                        "ends_with" -> element.text.endsWith(targetText, ignoreCase = true)
+                        "regex" -> {
+                            try {
+                                Regex(targetText, RegexOption.IGNORE_CASE).containsMatchIn(element.text)
+                            } catch (e: Exception) {
+                                false
+                            }
+                        }
+                        else -> element.text.contains(targetText, ignoreCase = true)
+                    }
+                }
+            }
+            
+            return result
+        }
+        
+        /**
+         * 发送事件到 React Native（静态方法）
+         */
+        private fun sendEventToJS(eventName: String, params: Any?) {
+            try {
+                reactContext?.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                    ?.emit(eventName, params)
+            } catch (e: Exception) {
+                android.util.Log.e("TouchAccessibility", "发送事件失败: $eventName, ${e.message}")
+            }
         }
     }
 }

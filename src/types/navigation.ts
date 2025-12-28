@@ -8,5 +8,8 @@ import type { RecordingSession } from './recording';
 export type RootStackParamList = {
   Home: { sessionToExecute?: RecordingSession } | undefined;
   SessionList: undefined;
+  TemplateList: undefined;
+  ModuleList: { softwareId: string; softwareName: string } | undefined;
+  RuleList: { moduleId: string; moduleName: string } | undefined;
 };
 

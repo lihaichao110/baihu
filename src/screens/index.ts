@@ -4,4 +4,5 @@
 
 export { HomeScreen } from './Home';
 export { SessionListScreen } from './SessionList';
+export { MatchConfigurationScreen } from './MatchConfigurationScreen';
 

@@ -6,4 +6,5 @@
 export * from './navigation';
 export * from './recording';
 export * from './touch';
+export * from './textMatching';
 
