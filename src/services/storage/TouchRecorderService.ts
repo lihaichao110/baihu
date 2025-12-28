@@ -5,7 +5,6 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
-  ActionType,
   ActionRecord,
   RecordingSession,
   SessionStats,
@@ -31,6 +30,13 @@ class TouchRecorderService {
     deviceHeight: number,
     orientation?: Orientation,
   ): void {
+    // 如果已经在录制中，不要重置，避免丢失已记录的触摸事件
+    if (this.isRecording && this.currentSession) {
+      console.warn('⚠️ 录制已在进行中，忽略重复的 startRecording 调用');
+      console.warn(`当前会话: ${this.currentSession.id}, 已记录 ${this.currentSession.actions.length} 个操作`);
+      return;
+    }
+
     const sessionId = `session_${Date.now()}`;
     // 自动判断屏幕方向
     const screenOrientation =
@@ -50,9 +56,11 @@ class TouchRecorderService {
     this.lastTouchTime = 0;
     this.lastTouchX = 0;
     this.lastTouchY = 0;
+
     console.log(
-      `开始录制会话: ${sessionId}, 屏幕方向: ${screenOrientation}, 尺寸: ${deviceWidth}x${deviceHeight}`,
+      `✅ 开始录制会话: ${sessionId}, 屏幕方向: ${screenOrientation}, 尺寸: ${deviceWidth}x${deviceHeight}`,
     );
+    console.log('isRecording 状态已设置为 true，现在可以记录触摸事件');
   }
 
   /**
@@ -60,7 +68,8 @@ class TouchRecorderService {
    */
   recordTouch(record: TouchRecord): void {
     if (!this.isRecording || !this.currentSession) {
-      console.warn('当前没有进行中的录制会话');
+      console.warn('❌ 当前没有进行中的录制会话，无法记录触摸事件');
+      console.warn(`isRecording: ${this.isRecording}, currentSession: ${this.currentSession ? '存在' : '不存在'}`);
       return;
     }
 
@@ -108,7 +117,7 @@ class TouchRecorderService {
     this.lastTouchY = record.y;
 
     console.log(
-      `记录触摸事件: ${record.type} at (${record.x.toFixed(0)}, ${record.y.toFixed(0)}) ` +
+      `✅ 记录触摸事件: ${record.type} at (${record.x.toFixed(0)}, ${record.y.toFixed(0)}) ` +
       `normalized: (${actionRecord.coordinates.normalizedX.toFixed(3)}, ${actionRecord.coordinates.normalizedY.toFixed(3)})`,
     );
   }
