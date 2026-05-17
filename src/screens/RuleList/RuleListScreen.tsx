@@ -11,7 +11,6 @@ import {
   FlatList,
   TouchableOpacity,
   Switch,
-  Image,
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { colors } from '../../theme';
@@ -29,11 +28,7 @@ interface RuleItem {
 
 const EmptyState = () => (
   <View style={styles.emptyContainer}>
-    <Image
-      source={require('../../assets/empty-state.png')}
-      style={styles.emptyImage}
-      resizeMode="contain"
-    />
+    <View style={styles.emptyImagePlaceholder} />
     <Text style={styles.emptyTitle}>暂无匹配规则</Text>
     <Text style={styles.emptyDescription}>
       当前模块没有配置任何规则，请点击"添加规则"按钮创建新规则
@@ -184,6 +179,14 @@ const styles = StyleSheet.create({
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  emptyImagePlaceholder: {
+    width: 120,
+    height: 120,
+    marginBottom: 20,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 60,
+    opacity: 0.6,
   },
   emptyImage: {
     width: 120,

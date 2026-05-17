@@ -10,7 +10,6 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Image,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -24,11 +23,7 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'RuleList'>;
 
 const EmptyState = () => (
   <View style={styles.emptyContainer}>
-    <Image
-      source={require('../../assets/empty-state.png')}
-      style={styles.emptyImage}
-      resizeMode="contain"
-    />
+    <View style={styles.emptyImagePlaceholder} />
     <Text style={styles.emptyTitle}>暂无可用模块</Text>
     <Text style={styles.emptyDescription}>
       当前软件没有配置任何模块，请检查软件配置或联系管理员
@@ -196,6 +191,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: DIMENSIONS.INNER_PADDING,
+  },
+  emptyImagePlaceholder: {
+    width: 120,
+    height: 120,
+    marginBottom: 20,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 60,
+    opacity: 0.6,
   },
   emptyImage: {
     width: 120,
